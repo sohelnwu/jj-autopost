@@ -1,0 +1,68 @@
+{
+  "graphVersion": "v23.0",
+  "catchUpHours": 3,
+  "news": {
+    "top": { "label": "আজকের সেরা খবর", "url": "https://news.google.com/rss?hl=bn&gl=BD&ceid=BD:bn" },
+    "bangladesh": { "label": "দেশের খবর", "q": "বাংলাদেশ" },
+    "politics": { "label": "রাজনীতি", "q": "রাজনীতি" },
+    "sports": { "label": "খেলার খবর", "q": "খেলা OR ক্রিকেট OR ফুটবল" },
+    "cricket": { "label": "ক্রিকেট", "q": "ক্রিকেট" },
+    "football": { "label": "ফুটবল", "q": "ফুটবল" },
+    "world": { "label": "আন্তর্জাতিক", "q": "আন্তর্জাতিক" },
+    "business": { "label": "অর্থনীতি", "q": "অর্থনীতি OR বাণিজ্য" },
+    "entertainment": { "label": "বিনোদন", "q": "বিনোদন" },
+    "tech": { "label": "প্রযুক্তি", "q": "প্রযুক্তি" }
+  },
+  "pages": [
+    {
+      "id": "jj-news",
+      "name": "JJ News",
+      "logoText": "JJ News",
+      "handle": "fb.com/jjnews",
+      "pageId": "",
+      "theme": { "accent": "#C8102E", "accent2": "#7F1D1D", "ink": "#0F172A", "paper": "#FFFFFF" },
+      "hashtags": ["JJNews", "JJNetwork"],
+      "weatherCity": { "name": "ঢাকা", "lat": 23.8103, "lon": 90.4125 },
+      "prayerCity": { "name": "ঢাকা", "lat": 23.8103, "lon": 90.4125 },
+      "posts": [
+        { "time": "06:00", "type": "prayer" },
+        { "time": "07:00", "type": "good-morning" },
+        { "time": "08:00", "type": "weather" },
+        { "time": "11:00", "type": "single-news", "news": "top" },
+        { "time": "13:00", "type": "news-list", "news": "bangladesh", "count": 5 },
+        { "time": "16:00", "type": "single-news", "news": "sports" },
+        { "time": "18:00", "type": "news-list", "news": "politics", "count": 5 },
+        { "time": "21:00", "type": "news-list", "news": "top", "count": 10, "title": "আজকের সেরা ১০ খবর" }
+      ]
+    },
+    {
+      "id": "jj-sports",
+      "name": "JJ Sports",
+      "logoText": "JJ Sports",
+      "handle": "fb.com/jjsports",
+      "pageId": "",
+      "theme": { "accent": "#047857", "accent2": "#064E3B", "ink": "#052E16", "paper": "#F7FEE7" },
+      "hashtags": ["JJSports", "খেলা"],
+      "posts": [
+        { "time": "09:00", "type": "news-list", "news": "sports", "count": 5 },
+        { "time": "12:00", "type": "single-news", "news": "cricket" },
+        { "time": "17:00", "type": "single-news", "news": "football" },
+        { "time": "20:00", "type": "news-list", "news": "cricket", "count": 5, "title": "আজকের ক্রিকেট" }
+      ]
+    },
+    {
+      "id": "jj-official",
+      "name": "JJ Official",
+      "logoText": "JJ Official",
+      "handle": "fb.com/jjofficial",
+      "pageId": "",
+      "theme": { "accent": "#6D28D9", "accent2": "#4C1D95", "ink": "#1E1B4B", "paper": "#FFFFFF" },
+      "hashtags": ["JJOfficial", "JJNetwork"],
+      "weatherCity": { "name": "উল্লাপাড়া", "lat": 24.316, "lon": 89.566 },
+      "posts": [
+        { "time": "08:00", "type": "good-morning" },
+        { "time": "10:00", "type": "weather" }
+      ]
+    }
+  ]
+}

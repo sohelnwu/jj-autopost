@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>পেজ টোকেন হেল্পার</title>
+<style>
+  :root { --bg:#f8fafc; --card:#fff; --ink:#0f172a; --muted:#64748b; --accent:#c8102e; --line:#e2e8f0; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1120; --card:#111827; --ink:#e5e7eb; --muted:#94a3b8; --line:#1f2937; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui, 'Noto Sans Bengali', sans-serif; padding:16px; }
+  main { max-width:640px; margin:auto; }
+  h1 { font-size:22px; margin:8px 0 4px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin:14px 0; }
+  label { display:block; font-weight:600; margin:10px 0 4px; }
+  input, textarea { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:transparent; color:inherit; font:inherit; }
+  textarea { min-height:140px; font-family:ui-monospace, monospace; font-size:13px; }
+  button { margin-top:12px; padding:11px 18px; border:0; border-radius:10px; background:var(--accent); color:#fff; font:600 16px/1 inherit; cursor:pointer; }
+  .muted { color:var(--muted); font-size:14px; }
+  .warn { border-left:4px solid #f59e0b; padding:8px 12px; background:rgba(245,158,11,.1); border-radius:8px; font-size:14px; }
+  .row { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; }
+  .row b { flex:1 1 180px; }
+  .row input { flex:1 1 160px; width:auto; }
+  #log { white-space:pre-wrap; font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>JJ AutoPost — পেজ টোকেন হেল্পার</h1>
+  <p class="muted">এই পাতা আপনার ব্রাউজারেই চলে, কোনো সার্ভারে কিছু পাঠায় না — শুধু Facebook-এর নিজের সার্ভারে (graph.facebook.com) অনুরোধ যায়।</p>
+  <div class="warn">App Secret আর টোকেন কাউকে দেবেন না, স্ক্রিনশটও শেয়ার করবেন না। কাজ শেষে পাতাটা বন্ধ করে দিন।</div>
+
+  <div class="card">
+    <label>১. App ID</label><input id="appId" inputmode="numeric" autocomplete="off">
+    <label>২. App Secret</label><input id="appSecret" type="password" autocomplete="off">
+    <label>৩. Graph API Explorer থেকে নেওয়া User Token</label><input id="userToken" type="password" autocomplete="off">
+    <p class="muted">Explorer-এ এই পারমিশনগুলো দিয়ে টোকেন নেবেন: pages_show_list, pages_manage_posts, pages_read_engagement</p>
+    <button id="go">পেজগুলো আনো</button>
+  </div>
+
+  <div class="card" id="pagesCard" hidden>
+    <b>৪. প্রতিটা পেজের পাশে config/pages.json-এর id লিখুন</b>
+    <p class="muted">যে পেজে অটো পোস্ট চান না, তার ঘর খালি রাখুন।</p>
+    <div id="pages"></div>
+    <button id="make">GitHub Secret বানাও</button>
+  </div>
+
+  <div class="card" id="outCard" hidden>
+    <b>৫. নিচের পুরো লেখাটা কপি করে GitHub-এ FB_PAGE_TOKENS নামে Secret হিসেবে রাখুন</b>
+    <textarea id="out" readonly></textarea>
+    <button id="copy">কপি করো</button>
+  </div>
+
+  <div id="log" class="muted"></div>
+</main>
+<script>
+const V = 'v23.0';
+const $ = (id) => document.getElementById(id);
+const log = (m) => { $('log').textContent = m; };
+let pages = [];
+
+async function api(path) {
+  const r = await fetch(`https://graph.facebook.com/${V}/${path}`);
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message);
+  return j;
+}
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+$('go').onclick = async () => {
+  const id = $('appId').value.trim(), sec = $('appSecret').value.trim(), ut = $('userToken').value.trim();
+  if (!id || !sec || !ut) return log('তিনটা ঘরই পূরণ করুন।');
+  try {
+    log('দীর্ঘমেয়াদি টোকেন নেওয়া হচ্ছে…');
+    const ll = await api(`oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(id)}&client_secret=${encodeURIComponent(sec)}&fb_exchange_token=${encodeURIComponent(ut)}`);
+    log('পেজের তালিকা আনা হচ্ছে…');
+    const acc = await api(`me/accounts?fields=id,name,access_token&limit=100&access_token=${encodeURIComponent(ll.access_token)}`);
+    pages = acc.data || [];
+    if (!pages.length) return log('কোনো পেজ পাওয়া যায়নি। Explorer-এ টোকেন নেওয়ার সময় পেজগুলো সিলেক্ট করেছিলেন কিনা দেখুন।');
+    // প্রথম পেজের টোকেনের মেয়াদ যাচাই
+    let note = '';
+    try {
+      const d = await api(`debug_token?input_token=${encodeURIComponent(pages[0].access_token)}&access_token=${encodeURIComponent(id + '|' + sec)}`);
+      note = d.data?.expires_at === 0 ? 'পেজ টোকেনের মেয়াদ: শেষ হয় না (Never)।' : `পেজ টোকেনের মেয়াদ শেষ: ${new Date(d.data.expires_at * 1000).toLocaleString()}`;
+    } catch (e) { note = 'মেয়াদ যাচাই করা যায়নি: ' + e.message; }
+    $('pages').innerHTML = pages.map((p, i) => `<div class="row"><b></b><input data-i="${i}" placeholder="যেমন jj-news"></div>`).join('');
+    $('pages').querySelectorAll('.row b').forEach((b, i) => { b.textContent = pages[i].name; });
+    $('pages').querySelectorAll('input').forEach((inp, i) => {
+      const s = slug(pages[i].name);
+      if (s.startsWith('jj-')) inp.value = s;
+    });
+    $('pagesCard').hidden = false;
+    log(`${pages.length}টি পেজ পাওয়া গেছে। ${note}`);
+  } catch (e) { log('ত্রুটি: ' + e.message); }
+};
+
+$('make').onclick = () => {
+  const out = {};
+  $('pages').querySelectorAll('input').forEach((inp) => {
+    const key = inp.value.trim();
+    if (key) { const p = pages[inp.dataset.i]; out[key] = { id: p.id, token: p.access_token }; }
+  });
+  if (!Object.keys(out).length) return log('অন্তত একটা পেজের id লিখুন।');
+  $('out').value = JSON.stringify(out);
+  $('outCard').hidden = false;
+  log(`${Object.keys(out).length}টি পেজের Secret তৈরি হয়েছে।`);
+};
+
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('out').value); log('কপি হয়েছে।'); }
+  catch { $('out').select(); log('লেখাটা সিলেক্ট করা হয়েছে, হাতে কপি করুন।'); }
+};
+</script>
+</body>
+</html>

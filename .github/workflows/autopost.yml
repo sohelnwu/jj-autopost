@@ -1,0 +1,89 @@
+# JJ Network অটো পোস্ট
+# প্রতি ঘণ্টায় একবার চলে (UTC মিনিট ১৭ = বাংলাদেশ সময় প্রতি ঘণ্টার ১৭ মিনিটে)।
+# config/pages.json-এ যে পোস্টের সময় হয়েছে শুধু সেগুলো বানিয়ে ফেসবুকে পোস্ট করে।
+# GitHub-এর শিডিউল কখনো কখনো কয়েক মিনিট থেকে বেশি দেরিতে চলতে পারে।
+
+name: JJ AutoPost
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      page:
+        description: 'কোন পেজ? (config-এর id, যেমন jj-news — সব পেজের জন্য all)'
+        default: 'all'
+        required: true
+      type:
+        description: 'কোন কার্ড? (খালি রাখলে সব)'
+        type: choice
+        default: ''
+        options: ['', 'good-morning', 'weather', 'prayer', 'news-list', 'single-news']
+      dry_run:
+        description: 'শুধু কার্ড বানাবে, ফেসবুকে পোস্ট করবে না'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jj-autopost
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FB_PAGE_TOKENS: ${{ secrets.FB_PAGE_TOKENS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: সময় হয়েছে কিনা দেখা
+        id: due
+        if: github.event_name == 'schedule'
+        run: node src/due.js
+
+      - name: প্যাকেজ ও ব্রাউজার ইনস্টল
+        if: github.event_name == 'workflow_dispatch' || steps.due.outputs.has_due == 'true'
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: কার্ড বানানো ও পোস্ট (শিডিউল)
+        if: github.event_name == 'schedule' && steps.due.outputs.has_due == 'true'
+        run: node src/run.js --due
+
+      - name: কার্ড বানানো (হাতে চালানো)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          PAGE: ${{ inputs.page }}
+          TYPE: ${{ inputs.type }}
+        run: |
+          if [ -n "$TYPE" ]; then node src/run.js --page "$PAGE" --type "$TYPE"; else node src/run.js --page "$PAGE"; fi
+
+      - name: বানানো কার্ডগুলো সংরক্ষণ (Artifacts থেকে ডাউনলোড করা যাবে)
+        if: always() && hashFiles('out/**/*.png') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: cards-${{ github.run_id }}
+          path: out/**/*.png
+          retention-days: 3
+
+      - name: কোনগুলো পোস্ট হয়েছে তা মনে রাখা
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain state)" ]; then
+            git config user.name "jj-autopost-bot"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state
+            git commit -m "পোস্টের হিসাব আপডেট [skip ci]"
+            git pull --rebase --autostash || true
+            git push
+          fi

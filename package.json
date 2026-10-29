@@ -1,0 +1,18 @@
+{
+  "name": "jj-autopost",
+  "version": "1.0.0",
+  "description": "JJ Network — ফেসবুক পেজে স্বয়ংক্রিয় ফটোকার্ড (শুভ সকাল, আবহাওয়া, নামাজের সময়, সেরা ১০ খবর, বিভাগভিত্তিক খবর)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "preview": "node src/run.js --all --sample --dry",
+    "preview-live": "node src/run.js --all --dry",
+    "due": "node src/run.js --due"
+  },
+  "dependencies": {
+    "@fontsource/baloo-da-2": "^5.3.0",
+    "@fontsource/noto-sans-bengali": "^5.3.0",
+    "@fontsource/tiro-bangla": "^5.3.0",
+    "playwright": "^1.64.1"
+  }
+}
