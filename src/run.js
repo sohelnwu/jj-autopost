@@ -12,7 +12,10 @@ import { getWeather, getPrayer, getHeadlines, SAMPLE } from './data.js';
 import * as T from './templates.js';
 import * as C from './captions.js';
 import { renderCard, closeBrowser } from './render.js';
-import { postPhoto } from './facebook.js';
+import { postPhoto, postReel } from './facebook.js';
+import * as R from './reels.js';
+import { REEL_SIZE } from './reel-slides.js';
+import { tts, buildReel } from './video.js';
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
@@ -82,8 +85,60 @@ async function build({ page, post }) {
       const label = post.label || cfg.news[post.news]?.label || 'খবর';
       return { html: T.singleNews({ ...base, label, item: items[0] }), caption: C.captionSingle(page, t, label, items[0]), headlineKey: items[0].key };
     }
+    // ---------- রিল ----------
+    case 'reel-news': {
+      const count = post.count || 5;
+      const items = sample ? SAMPLE.headlines.slice(0, count) : await once(`n|${post.news}|${count}`, () => getHeadlines(feedUrl(post.news), count));
+      if (items.length < 3) throw new Error(`"${post.news}" বিভাগে যথেষ্ট খবর পাওয়া যায়নি`);
+      const label = cfg.news[post.news]?.label || 'খবর';
+      return { reel: R.reelNews(base, { title: post.title || `${label}: সেরা ${items.length}`, label, items }) };
+    }
+    case 'reel-breaking': {
+      const used = new Set(state.headlines[page.id] || []);
+      const items = sample ? SAMPLE.headlines.slice(0, 1) : await getHeadlines(feedUrl(post.news), 1, used);
+      if (!items.length) throw new Error(`"${post.news}" বিভাগে নতুন খবর পাওয়া যায়নি`);
+      return { reel: R.reelBreaking(base, { item: items[0] }), headlineKey: items[0].key };
+    }
+    case 'reel-weather-prayer': {
+      const w = sample ? SAMPLE.weather : await once(`w|${page.weatherCity?.name}`, () => getWeather(page.weatherCity));
+      const p = sample ? SAMPLE.prayer : await once(`p|${page.prayerCity?.name}`, () => getPrayer(page.prayerCity));
+      return { reel: R.reelWeatherPrayer(base, { w, p }) };
+    }
+    case 'reel-morning': {
+      const message = pick(C.MORNING_MESSAGES, `${t.iso}|${page.id}|reel`);
+      return { reel: R.reelMorning(base, { message }) };
+    }
+    case 'reel-lines': {
+      const all = R.loadLines()[post.lines] || [];
+      if (!all.length) throw new Error(`content/lines.json-এ "${post.lines}" তালিকা নেই`);
+      const usedKey = `${page.id}|lines|${post.lines}`;
+      let used = new Set(state.headlines[usedKey] || []);
+      if (all.filter((l) => !used.has(l)).length < (post.count || 3)) used = new Set(); // সব শেষ হলে আবার শুরু
+      const fresh = all.filter((l) => !used.has(l));
+      const start = Math.abs([...`${t.iso}${page.id}`].reduce((a, c) => (Math.imul(a, 31) + c.codePointAt(0)) | 0, 7)) % fresh.length;
+      const lines = Array.from({ length: Math.min(post.count || 3, fresh.length) }, (_, i) => fresh[(start + i) % fresh.length]);
+      return { reel: R.reelLines(base, { kind: post.lines, lines }), usedLines: { key: usedKey, lines, reset: used.size === 0 } };
+    }
     default: throw new Error(`অজানা পোস্টের ধরন: ${post.type}`);
   }
+}
+
+// রিল: প্রতিটা স্লাইড ছবি → ভয়েস → ভিডিও
+async function makeReel(page, reel, name) {
+  const dir = `${outDir}/${name}`;
+  mkdirSync(dir, { recursive: true });
+  const voice = page.reelVoice || cfg.reelVoice || 'bn-BD-NabanitaNeural';
+  const slides = [];
+  for (const [i, s] of reel.slides.entries()) {
+    const png = await renderCard(s.html, `${dir}/s${i}.png`, REEL_SIZE);
+    const mp3 = s.say ? tts(s.say, `${dir}/s${i}.mp3`, voice, cfg.reelVoiceRate || '+0%') : null;
+    slides.push({ png, voice: mp3, min: s.min });
+  }
+  const out = buildReel(slides, `${outDir}/${name}.mp4`, `${t.iso}|${page.id}|${name}`);
+  const voiced = slides.filter((x) => x.voice).length;
+  console.log(`🎬 রিল তৈরি: ${out.file} (${out.seconds.toFixed(1)} সেকেন্ড, ভয়েস ${voiced ? 'আছে' : 'নেই'})`);
+  if (process.env.GITHUB_ACTIONS) console.log(`::notice title=রিল তৈরি::${name} — ${out.seconds.toFixed(0)} সেকেন্ড, ভয়েস ${voiced ? 'আছে' : 'নেই'}`);
+  return out.file;
 }
 
 let failed = 0;
@@ -92,25 +147,41 @@ mkdirSync(outDir, { recursive: true });
 
 for (const job of jobs) {
   const { page, post } = job;
-  const name = `${page.id}-${post.time.replace(':', '')}-${post.type}${post.news ? '-' + post.news : ''}`;
+  const name = `${page.id}-${post.time.replace(':', '')}-${post.type}${(post.news || post.lines) ? '-' + (post.news || post.lines) : ''}`;
   try {
     const card = await build(job);
-    const png = await renderCard(card.html, `${outDir}/${name}.png`);
+    let media;
+    if (card.reel) {
+      media = await makeReel(page, card.reel, name);
+      card.caption = card.reel.caption;
+    } else {
+      media = await renderCard(card.html, `${outDir}/${name}.png`);
+      console.log(`🖼️  তৈরি: ${media}`);
+    }
     writeFileSync(`${outDir}/${name}.txt`, card.caption);
-    console.log(`🖼️  তৈরি: ${png}`);
 
     if (dry || sample) { console.log('   (ড্রাই রান — পোস্ট করা হয়নি)'); continue; }
     const cred = credFor(page);
     if (!cred?.id || !cred?.token) { console.log(`   ⚠️ ${page.name}: টোকেন/পেজ আইডি নেই, তাই পোস্ট হয়নি`); continue; }
 
-    const res = await postPhoto({ pageId: cred.id, token: cred.token, imagePath: png, caption: card.caption, graphVersion: cfg.graphVersion });
-    console.log(`   ✅ পোস্ট হয়েছে: ${page.name} (post id ${res.post_id || res.id})`);
+    if (card.reel) {
+      const res = await postReel({ pageId: cred.id, token: cred.token, videoPath: media, caption: card.caption, graphVersion: cfg.graphVersion });
+      console.log(`   ✅ ${res.as === 'reel' ? 'রিল' : 'ভিডিও'} পোস্ট হয়েছে: ${page.name} (id ${res.id})`);
+    } else {
+      const res = await postPhoto({ pageId: cred.id, token: cred.token, imagePath: media, caption: card.caption, graphVersion: cfg.graphVersion });
+      console.log(`   ✅ পোস্ট হয়েছে: ${page.name} (post id ${res.post_id || res.id})`);
+    }
     (state.days[t.iso] ||= []).push(postKey(page, post));
     if (card.headlineKey) (state.headlines[page.id] ||= []).push(card.headlineKey);
+    if (card.usedLines) {
+      const u = card.usedLines;
+      state.headlines[u.key] = [...(u.reset ? [] : (state.headlines[u.key] || [])), ...u.lines];
+    }
     saveState(state);
   } catch (e) {
     failed++;
     console.error(`❌ ${name}: ${e.message}`);
+    if (process.env.GITHUB_ACTIONS) console.log(`::error title=${name}::${e.message.replace(/\n/g, ' ')}`);
   }
 }
 

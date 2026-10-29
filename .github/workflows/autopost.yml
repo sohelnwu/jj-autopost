@@ -18,7 +18,7 @@ on:
         description: 'কোন কার্ড? (খালি রাখলে সব)'
         type: choice
         default: ''
-        options: ['', 'good-morning', 'weather', 'prayer', 'news-list', 'single-news']
+        options: ['', 'good-morning', 'weather', 'prayer', 'news-list', 'single-news', 'reel-news', 'reel-breaking', 'reel-weather-prayer', 'reel-morning', 'reel-lines']
       dry_run:
         description: 'শুধু কার্ড বানাবে, ফেসবুকে পোস্ট করবে না'
         type: boolean
@@ -34,7 +34,7 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       FB_PAGE_TOKENS: ${{ secrets.FB_PAGE_TOKENS }}
     steps:
@@ -54,6 +54,9 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+          which ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+          pip install --quiet --user --break-system-packages edge-tts || pipx install edge-tts || echo "edge-tts ইনস্টল হয়নি — রিল ভয়েস ছাড়া হবে"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: কার্ড বানানো ও পোস্ট (শিডিউল)
         if: github.event_name == 'schedule' && steps.due.outputs.has_due == 'true'
@@ -69,11 +72,13 @@ jobs:
           if [ -n "$TYPE" ]; then node src/run.js --page "$PAGE" --type "$TYPE"; else node src/run.js --page "$PAGE"; fi
 
       - name: বানানো কার্ডগুলো সংরক্ষণ (Artifacts থেকে ডাউনলোড করা যাবে)
-        if: always() && hashFiles('out/**/*.png') != ''
+        if: always() && (hashFiles('out/*/*.png') != '' || hashFiles('out/*/*.mp4') != '')
         uses: actions/upload-artifact@v4
         with:
           name: cards-${{ github.run_id }}
-          path: out/**/*.png
+          path: |
+            out/*/*.png
+            out/*/*.mp4
           retention-days: 3
 
       - name: কোনগুলো পোস্ট হয়েছে তা মনে রাখা

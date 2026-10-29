@@ -14,12 +14,12 @@ async function getBrowser() {
   return browser;
 }
 
-export async function renderCard(html, outPng) {
+export async function renderCard(html, outPng, size = { width: 1080, height: 1350 }) {
   mkdirSync(resolve(outPng, '..'), { recursive: true });
   const htmlPath = outPng.replace(/\.png$/, '.html');
   writeFileSync(htmlPath, html);
   const b = await getBrowser();
-  const page = await b.newPage({ viewport: { width: 1080, height: 1350 }, deviceScaleFactor: 1 });
+  const page = await b.newPage({ viewport: size, deviceScaleFactor: 1 });
   await page.goto(pathToFileURL(resolve(htmlPath)).href, { waitUntil: 'load' });
   await page.evaluate(() => document.fonts.ready);
   // লম্বা লেখা বক্সে না ধরলে ফন্ট ছোট করা

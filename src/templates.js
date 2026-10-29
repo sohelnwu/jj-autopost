@@ -11,7 +11,7 @@ const face = (family, pkg, slug, weight) => ['bengali', 'latin'].map((sub) => `
 @font-face{font-family:'${family}';font-weight:${weight};font-style:normal;font-display:block;
 src:url('${fontFile(pkg, `${slug}-${sub}-${weight}-normal.woff2`)}') format('woff2');}`).join('');
 
-const FONTS = [
+export const FONTS = [
   face('Hind', 'noto-sans-bengali', 'noto-sans-bengali', 400),
   face('Hind', 'noto-sans-bengali', 'noto-sans-bengali', 500),
   face('Hind', 'noto-sans-bengali', 'noto-sans-bengali', 600),
@@ -55,7 +55,7 @@ export function weatherText(code) {
 }
 
 // ---------- কাঠামো ----------
-function logoHTML(page) {
+export function logoHTML(page) {
   const file = `assets/logos/${page.id}.png`;
   if (existsSync(file)) {
     const b64 = readFileSync(file).toString('base64');

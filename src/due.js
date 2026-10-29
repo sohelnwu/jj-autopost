@@ -17,7 +17,7 @@ export function saveState(s) {
   writeFileSync(STATE, JSON.stringify(s, null, 1) + '\n');
 }
 
-export const postKey = (page, post) => `${page.id}|${post.time}|${post.type}|${post.news || ''}`;
+export const postKey = (page, post) => `${page.id}|${post.time}|${post.type}|${post.news || post.lines || ''}`;
 
 export function computeDue(cfg, state, now = dhakaNow()) {
   const nowMin = now.h * 60 + now.min;
