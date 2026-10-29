@@ -41,7 +41,9 @@ export function computeDue(cfg, state, now = dhakaNow()) {
 
 // সরাসরি চালালে: GitHub Actions-কে জানায় কিছু পোস্ট করার আছে কিনা
 if (process.argv[1]?.endsWith('due.js')) {
-  const due = computeDue(loadConfig(), loadState());
+  // টোকেন Secret না থাকলে শিডিউলে কিছুই চালাবে না (ফ্রি মিনিট বাঁচাতে)
+  const due = process.env.FB_PAGE_TOKENS ? computeDue(loadConfig(), loadState()) : [];
+  if (!process.env.FB_PAGE_TOKENS) console.log('FB_PAGE_TOKENS Secret এখনো সেট করা হয়নি — তাই কিছু চালানো হচ্ছে না।');
   console.log(due.length ? `এখন ${due.length}টি পোস্ট বাকি:\n` + due.map((d) => `  ${d.page.name} — ${d.post.time} ${d.post.type} ${d.post.news || ''}`).join('\n') : 'এখন কোনো পোস্টের সময় হয়নি।');
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `has_due=${due.length ? 'true' : 'false'}\n`);
 }
