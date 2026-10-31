@@ -176,9 +176,11 @@ for (const job of jobs) {
     if (card.reel) {
       const res = await postReel({ pageId: cred.id, token: cred.token, videoPath: media, caption: card.caption, graphVersion: cfg.graphVersion });
       console.log(`   ✅ ${res.as === 'reel' ? 'রিল' : 'ভিডিও'} পোস্ট হয়েছে: ${page.name} (id ${res.id})`);
+      if (process.env.GITHUB_ACTIONS) console.log(`::notice title=${res.as === 'reel' ? 'রিল' : 'ভিডিও'} পোস্ট হয়েছে::${page.name} — ${name} (id ${res.id})`);
     } else {
       const res = await postPhoto({ pageId: cred.id, token: cred.token, imagePath: media, caption: card.caption, graphVersion: cfg.graphVersion });
       console.log(`   ✅ পোস্ট হয়েছে: ${page.name} (post id ${res.post_id || res.id})`);
+      if (process.env.GITHUB_ACTIONS) console.log(`::notice title=পোস্ট হয়েছে::${page.name} — ${name} (id ${res.post_id || res.id})`);
     }
     (state.days[t.iso] ||= []).push(postKey(page, post));
     if (card.headlineKey) (state.headlines[page.id] ||= []).push(card.headlineKey);
