@@ -37,6 +37,7 @@ jobs:
     timeout-minutes: 45
     env:
       FB_PAGE_TOKENS: ${{ secrets.FB_PAGE_TOKENS }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 

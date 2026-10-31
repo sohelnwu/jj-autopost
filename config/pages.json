@@ -98,7 +98,9 @@
           "entertainment",
           "world"
         ]
-      }
+      },
+      "geminiVoice": "Charon",
+      "newsVoiceRate": "+8%"
     },
     {
       "id": "jj-sports",
@@ -154,7 +156,8 @@
         { "time": "22:00", "type": "reel-lines", "lines": "feelings", "count": 3 },
         { "time": "23:00", "type": "good-night" }
       ],
-      "reelVoice": "bn-BD-NabanitaNeural"
+      "reelVoice": "bn-BD-NabanitaNeural",
+      "geminiVoice": "Aoede"
     }
   ],
   "reelVoice": "bn-BD-NabanitaNeural",

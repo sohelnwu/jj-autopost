@@ -57,21 +57,18 @@ export function buildReel(slides, outMp4, seed = 'x') {
   const total = start[d.length - 1] + d[d.length - 1];
 
   const args = ['-y', '-hide_banner', '-loglevel', 'error'];
-  slides.forEach((s) => args.push('-i', s.png));
+  slides.forEach((s, i) => args.push('-loop', '1', '-t', d[i].toFixed(2), '-i', s.png));
   const voices = slides.map((s, i) => ({ f: s.voice, at: start[i] + (i ? XF : 0.25) })).filter((v) => v.f);
   voices.forEach((v) => args.push('-i', v.f));
   const musicIdx = slides.length + voices.length;
   args.push(...musicInput(seed, total));
 
   const f = [];
-  // হালকা জুম (Ken Burns) প্রতিটা স্লাইডে
+  // ক্যামেরা স্থির — কোনো জুম/নড়াচড়া নয়
   slides.forEach((_, i) => {
-    const frames = Math.ceil(d[i] * FPS);
-    const zin = i % 2 === 0;
-    const z = zin ? `1+0.07*on/${frames}` : `1.07-0.07*on/${frames}`;
-    f.push(`[${i}:v]scale=1620:2880,zoompan=z='${z}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=1080x1920:fps=${FPS},setsar=1,format=yuv420p[v${i}]`);
+    f.push(`[${i}:v]fps=${FPS},scale=1080:1920,setsar=1,format=yuv420p[v${i}]`);
   });
-  const trans = ['fade', 'slideup', 'fade', 'smoothleft'];
+  const trans = ['fade', 'fade', 'fade', 'fade'];
   let last = 'v0';
   for (let i = 1; i < slides.length; i++) {
     const out = i === slides.length - 1 ? 'vout' : `x${i}`;

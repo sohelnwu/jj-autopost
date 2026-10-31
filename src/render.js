@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 let browser;
 
-async function getBrowser() {
+export async function getBrowser() {
   if (browser) return browser;
   const { chromium } = await import('playwright');
   const opts = { args: ['--no-sandbox', '--font-render-hinting=none'] };

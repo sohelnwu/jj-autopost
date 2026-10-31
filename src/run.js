@@ -6,17 +6,19 @@
 //   node src/run.js --page jj-news --type weather
 //   যোগ করা যায়: --sample (নমুনা ডেটা, ইন্টারনেট লাগে না)  --dry (পোস্ট করবে না)
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { dhakaNow, pick } from './util.js';
+import { dhakaNow, pick, bnDate } from './util.js';
 import { loadConfig, loadState, saveState, computeDue, postKey } from './due.js';
 import { getWeather, getPrayer, getHeadlines, SAMPLE } from './data.js';
 import * as T from './cards.js';
 import * as C from './captions.js';
-import { renderCard, closeBrowser } from './render.js';
+import { renderCard, closeBrowser, getBrowser } from './render.js';
 import { postPhoto, postReel } from './facebook.js';
 import { resolveTokens, hasAnyToken } from './tokens.js';
 import * as R from './reels.js';
 import { REEL_SIZE } from './reel-slides.js';
-import { tts, buildReel } from './video.js';
+import { buildReel } from './video.js';
+import { speak, voiceStatus } from './voice.js';
+import { buildNewsReel } from './newsreel.js';
 import { pickBreaking } from './breaking.js';
 import { firstComment } from './facebook.js';
 import { ask, followLine } from './viral.js';
@@ -108,13 +110,14 @@ async function build({ page, post }) {
       const items = sample ? SAMPLE.headlines.slice(0, count) : await once(`n|${post.news}|${count}`, () => getHeadlines(feedUrl(post.news), count));
       if (items.length < 3) throw new Error(`"${post.news}" বিভাগে যথেষ্ট খবর পাওয়া যায়নি`);
       const label = cfg.news[post.news]?.label || 'খবর';
-      return { reel: R.reelNews(base, { title: post.title || `${label}: সেরা ${items.length}`, label, items, topic: topicOf(post.news) }) };
+      const title = post.title || `${label}: সেরা ${items.length}`;
+      return { newsReel: { title, kicker: label, items: items.map((x) => ({ ...x, label: x.label || label, topic: topicOf(post.news) })), caption: R.reelNews(base, { title, label, items, topic: topicOf(post.news) }).caption } };
     }
     case 'reel-breaking': {
       const used = new Set(state.headlines[page.id] || []);
       const items = sample ? SAMPLE.headlines.slice(0, 1) : await getHeadlines(feedUrl(post.news), 1, used);
       if (!items.length) throw new Error(`"${post.news}" বিভাগে নতুন খবর পাওয়া যায়নি`);
-      return { reel: R.reelBreaking(base, { item: items[0], topic: topicOf(post.news) }), headlineKey: items[0].key };
+      return { newsReel: { breaking: true, items: [{ ...items[0], label: 'ব্রেকিং', topic: topicOf(post.news) }], caption: R.reelBreaking(base, { item: items[0], topic: topicOf(post.news) }).caption }, headlineKey: items[0].key };
     }
     case 'reel-weather-prayer': {
       const w = sample ? SAMPLE.weather : await once(`w|${page.weatherCity?.name}`, () => getWeather(page.weatherCity));
@@ -150,7 +153,7 @@ async function build({ page, post }) {
       if (process.env.GITHUB_ACTIONS) console.log(`::notice title=ব্রেকিং বাছাই::${item.title} — ${item.source} (স্কোর ${Math.round(item.score || 0)})`);
       const asReel = b.reelEvery && post.n % b.reelEvery === 0;
       const label = item.topic === 'sports' ? 'খেলার খবর' : item.label;
-      if (asReel) return { reel: R.reelBreaking(base, { item, topic: item.topic }), headlineKey: item.key, breaking: true };
+      if (asReel) return { newsReel: { breaking: true, items: [{ ...item, label: 'ব্রেকিং' }], caption: R.reelBreaking(base, { item, topic: item.topic }).caption }, headlineKey: item.key, breaking: true };
       return { html: T.singleNews({ ...base, label, item, breaking: true }), caption: C.captionSingle(page, t, 'ব্রেকিং', item, item.topic), headlineKey: item.key, breaking: true };
     }
     default: throw new Error(`অজানা পোস্টের ধরন: ${post.type}`);
@@ -165,7 +168,7 @@ async function makeReel(page, reel, name) {
   const slides = [];
   for (const [i, s] of reel.slides.entries()) {
     const png = await renderCard(s.html, `${dir}/s${i}.png`, REEL_SIZE);
-    const mp3 = s.say ? tts(s.say, `${dir}/s${i}.mp3`, voice, cfg.reelVoiceRate || '+0%') : null;
+    const mp3 = s.say ? await speak(s.say, `${dir}/s${i}`, { style: page.id === 'jj-news' ? 'news' : 'warm', geminiVoice: page.geminiVoice || (page.id === 'jj-news' ? 'Charon' : 'Aoede'), edgeVoice: voice, edgeRate: cfg.reelVoiceRate || '+0%' }) : null;
     slides.push({ png, voice: mp3, min: s.min });
   }
   const out = buildReel(slides, `${outDir}/${name}.mp4`, `${t.iso}|${page.id}|${name}`);
@@ -186,7 +189,15 @@ for (const job of jobs) {
     const card = await build(job);
     if (card.skip) { console.log(`ℹ️ ${page.name}: ${card.skip}`); continue; }
     let media;
-    if (card.reel) {
+    if (card.newsReel) {
+      const nr = card.newsReel;
+      const out = await buildNewsReel({ ...nr, page, t, dateText: bnDate(t), outDir, name, getBrowser, seed: `${t.iso}|${name}`,
+        voice: { geminiVoice: page.geminiVoice || 'Charon', edgeVoice: page.reelVoice || cfg.reelVoice, edgeRate: page.newsVoiceRate || '+8%' } });
+      media = out.file; card.caption = nr.caption; card.reel = true;
+      const vs = [...voiceStatus.used].join('+') || 'নেই';
+      console.log(`🎬 নিউজ রিল তৈরি: ${out.file} (${out.seconds.toFixed(1)} সেকেন্ড, ভয়েস: ${vs})`);
+      if (process.env.GITHUB_ACTIONS) console.log(`::notice title=রিল তৈরি::${name} — ${out.seconds.toFixed(0)} সেকেন্ড, ভয়েস: ${vs}`);
+    } else if (card.reel) {
       media = await makeReel(page, card.reel, name);
       card.caption = card.reel.caption;
     } else {
@@ -244,4 +255,5 @@ for (const job of jobs) {
 }
 
 await closeBrowser();
+for (const n of voiceStatus.notes) if (process.env.GITHUB_ACTIONS) console.log(`::warning title=ভয়েস::${n}`);
 if (failed) { console.error(`\n${failed}টি কাজ ব্যর্থ হয়েছে।`); process.exit(1); }
