@@ -3,7 +3,18 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, statSync, writeFileSync } from 'node:fs';
 
-const KEY = () => process.env.GEMINI_API_KEY || '';
+// একাধিক Gemini কী: GEMINI_API_KEY-তে কমা/নতুন লাইন দিয়ে কয়েকটা, অথবা GEMINI_API_KEY_2 … GEMINI_API_KEY_10।
+// একটার সীমা শেষ (৪২৯) হলে সাথে সাথে পরেরটায় যায়। প্রতি ঘণ্টায় শুরুর কী বদলায়, যাতে চাপ সব কী-তে ভাগ হয়।
+const KEYS = (() => {
+  const all = [process.env.GEMINI_API_KEY, ...Array.from({ length: 9 }, (_, i) => process.env[`GEMINI_API_KEY_${i + 2}`])]
+    .flatMap((v) => String(v || '').split(/[\s,;]+/)).map((k) => k.trim()).filter((k) => k.length > 20);
+  const uniq = [...new Set(all)];
+  const start = uniq.length ? new Date().getUTCHours() % uniq.length : 0;
+  return [...uniq.slice(start), ...uniq.slice(0, start)];
+})();
+const dead = new Set(); // এই রানে সীমা-শেষ কী
+const KEY = () => KEYS.find((k) => !dead.has(k)) || '';
+export const geminiKeyCount = KEYS.length;
 const TRIM = 'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse';
 let geminiBroken = false;
 let edgeBroken = false;
@@ -11,8 +22,8 @@ export const voiceStatus = { used: new Set(), notes: new Set() };
 
 // style: 'news' (সংবাদ পাঠক) | 'warm' (শুভেচ্ছা/অনুভূতি)
 const STYLE = {
-  news: 'Read the following Bengali (Bangla, Bangladesh) text aloud exactly as written, like a professional Bangladeshi TV news anchor: clear, confident, natural human delivery, brisk news pace, no robotic tone. Do not add or skip any words.',
-  warm: 'Read the following Bengali (Bangla, Bangladesh) text aloud exactly as written, in a warm, natural, heartfelt human voice at a calm pace. Do not add or skip any words.',
+  news: 'You are a female news presenter on a leading Bangladeshi TV channel. Read the following Bangla text aloud exactly as written, in standard Bangladeshi (Dhaka) Bangla pronunciation, like a real human anchor: warm but authoritative, clear diction, natural intonation and breathing, lively brisk news pace, short natural pauses between news items. Read Bangla numerals in Bangla. Never sound robotic. Do not add, skip or translate any words.',
+  warm: 'Read the following Bangla text aloud exactly as written, in standard Bangladeshi Bangla pronunciation, in a warm, natural, heartfelt young female human voice at a calm pace with natural pauses. Never sound robotic. Do not add, skip or translate any words.',
 };
 
 async function gemini(text, outWav, { voice = 'Charon', style = 'news', models, trim = true } = {}) {
@@ -21,23 +32,24 @@ async function gemini(text, outWav, { voice = 'Charon', style = 'news', models, 
   let lastErr = '';
   for (const model of list) {
     for (let attempt = 0; attempt < 3; attempt++) {
+      const key = KEY(); if (!key) break;
       try {
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY() },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
           body: JSON.stringify({
             contents: [{ parts: [{ text: `${STYLE[style] || STYLE.news}\n\n${text}` }] }],
             generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
           }),
         });
         const j = await r.json().catch(() => ({}));
-        if (r.status === 429) {
-          lastErr = 'Gemini সীমা পূর্ণ (429)';
-          const sec = Math.min(65, Number(/retry in ([\d.]+)s/i.exec(j.error?.message || '')?.[1] || 30) + 2);
-          if (attempt < 2) { await new Promise((s) => setTimeout(s, sec * 1000)); continue; }
+        if (r.status === 429 || r.status === 403) {
+          lastErr = `Gemini সীমা পূর্ণ/অনুমতি নেই (${r.status})`;
+          dead.add(key);
+          if (KEY()) { attempt = -1; continue; } // পরের কী দিয়ে আবার
           break;
         }
-        if (!r.ok) { lastErr = `${model}: ${j.error?.message || r.status}`; break; }
+        if (!r.ok) { lastErr = `${model}: ${(j.error?.message || r.status).toString().slice(0, 160)}`; break; }
         const part = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
         if (!part) { lastErr = `${model}: অডিও আসেনি`; break; }
         const pcm = Buffer.from(part.inlineData.data, 'base64');

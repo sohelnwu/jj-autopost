@@ -78,7 +78,7 @@
         { "time": "21:00", "type": "news-list", "news": "top", "count": 10, "title": "আজকের সেরা ১০ খবর" },
         { "time": "22:30", "type": "good-night" }
       ],
-      "reelVoice": "bn-BD-PradeepNeural",
+      "reelVoice": "bn-BD-NabanitaNeural",
       "breaking": {
         "enabled": true,
         "from": "09:00",
@@ -99,7 +99,7 @@
           "world"
         ]
       },
-      "geminiVoice": "Charon",
+      "geminiVoice": "Kore",
       "newsVoiceRate": "+8%"
     },
     {
