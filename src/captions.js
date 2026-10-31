@@ -1,6 +1,8 @@
 // ক্যাপশন ও শুভ সকালের বার্তা (সব বার্তা এই প্রজেক্টের জন্য নতুন লেখা — কারো উক্তি নয়)
 import { bn, bnDate, banglaDateText, bnTime12, HIJRI_MONTHS } from './util.js';
 import { weatherText } from './templates.js';
+import { hashtags, ask, followLine, finalize } from './viral.js';
+import { noLinks } from './design.js';
 
 export const MORNING_MESSAGES = [
   'নতুন দিন মানে নতুন সুযোগ। আজকের দিনটা হোক হাসিমুখে শুরু।',
@@ -35,29 +37,87 @@ export const MORNING_MESSAGES = [
   'আলোর মতো ছড়িয়ে পড়ুক আপনার ভালোবাসা, সবার মাঝে।',
 ];
 
-const tags = (page, extra = []) => [...extra, ...(page.hashtags || [])].map((h) => (h.startsWith('#') ? h : `#${h}`)).join(' ');
+
+const seedOf = (page, t, x = '') => `${t.iso}|${page.id}|${x}`;
 
 export function captionGoodMorning(page, t, message) {
-  return `☀️ শুভ সকাল!\n\n${message}\n\n📅 ${bnDate(t)}\n🗓️ ${banglaDateText(t)}\n\nআপনার দিনটি ভালো কাটুক। কমেন্টে আপনার এলাকার নাম লিখে শুভেচ্ছা জানান 💛\n\n${tags(page, ['শুভসকাল', 'GoodMorning'])}`;
+  return finalize(`☀️ শুভ সকাল, প্রিয় ${page.name} পরিবার!
+
+"${message}"
+
+📅 ${bnDate(t)} | ${banglaDateText(t)}
+
+${ask('morning', seedOf(page, t, 'gm'))}
+
+${hashtags(page, 'morning')}`);
 }
 
 export function captionWeather(page, t, w) {
   const m = w.main;
-  const lines = w.divisions.map((d) => `• ${d.name}: ${bn(d.max)}°/${bn(d.min)}°, ${weatherText(d.code)}`).join('\n');
-  return `🌤️ আজকের আবহাওয়া — ${bnDate(t)}\n\n📍 ${m.name}: ${weatherText(m.code)}, সর্বোচ্চ ${bn(m.max)}° ও সর্বনিম্ন ${bn(m.min)}° সেলসিয়াস${m.rain != null ? `, বৃষ্টির সম্ভাবনা ${bn(m.rain)}%` : ''}।\n\nবিভাগীয় শহর:\n${lines}\n\n(পূর্বাভাস Open-Meteo থেকে স্বয়ংক্রিয়ভাবে নেওয়া; বাস্তব আবহাওয়া কিছুটা ভিন্ন হতে পারে)\n\n${tags(page, ['আবহাওয়া', 'বাংলাদেশ'])}`;
+  const hot = [...w.divisions].sort((a, b) => b.max - a.max)[0];
+  const rainy = [...w.divisions].filter((d) => d.rain != null).sort((a, b) => b.rain - a.rain)[0];
+  const lines = w.divisions.map((d) => `▪️ ${d.name}: ${bn(d.max)}° / ${bn(d.min)}° — ${weatherText(d.code)}`).join('\n');
+  return finalize(`🌤️ আজ ${m.name}-সহ সারাদেশে আবহাওয়া কেমন থাকবে? এক নজরে দেখে নিন 👇
+
+📍 ${m.name}: ${weatherText(m.code)}, সর্বোচ্চ ${bn(m.max)}° ও সর্বনিম্ন ${bn(m.min)}° সেলসিয়াস${m.rain != null ? `, বৃষ্টির সম্ভাবনা ${bn(m.rain)}%` : ''}
+🔥 সবচেয়ে গরম: ${hot.name} (${bn(hot.max)}°)${rainy && rainy.rain >= 30 ? `\n☔ বৃষ্টির সম্ভাবনা বেশি: ${rainy.name} (${bn(rainy.rain)}%)` : ''}
+
+${lines}
+
+সূত্র: Open-Meteo পূর্বাভাস (বাস্তবে কিছুটা ভিন্ন হতে পারে)
+
+${ask('weather', seedOf(page, t, 'w'))}
+${followLine(page)}
+
+${hashtags(page, 'weather')}`);
 }
 
 export function captionPrayer(page, t, p) {
   const T = p.times;
-  const hijri = p.hijri ? `\n🌙 ${bn(p.hijri.day)} ${HIJRI_MONTHS[p.hijri.month - 1]} ${bn(p.hijri.year)} হিজরি` : '';
-  return `🕌 আজকের নামাজের সময়সূচি — ${p.city}\n📅 ${bnDate(t)}${hijri}\n\nফজর: ${bnTime12(T.fajr)}\nসূর্যোদয়: ${bnTime12(T.sunrise)}\nযোহর: ${bnTime12(T.dhuhr)}\nআসর: ${bnTime12(T.asr)}\nমাগরিব: ${bnTime12(T.maghrib)}\nএশা: ${bnTime12(T.isha)}\n\n(অন্য জেলায় কয়েক মিনিট আগে-পরে হতে পারে। চূড়ান্ত সময়ের জন্য স্থানীয় মসজিদের সময়সূচি দেখুন।)\n\n${tags(page, ['নামাজেরসময়', 'Prayertime'])}`;
+  const hijri = p.hijri ? ` | ${bn(p.hijri.day)} ${HIJRI_MONTHS[p.hijri.month - 1]} ${bn(p.hijri.year)} হিজরি` : '';
+  return finalize(`🕌 আজকের নামাজের সময়সূচি — ${p.city} ও আশপাশ
+📅 ${bnDate(t)}${hijri}
+
+🌙 ফজর: ${bnTime12(T.fajr)}
+🌅 সূর্যোদয়: ${bnTime12(T.sunrise)}
+☀️ যোহর: ${bnTime12(T.dhuhr)}
+🌤️ আসর: ${bnTime12(T.asr)}
+🌇 মাগরিব: ${bnTime12(T.maghrib)}
+🌃 এশা: ${bnTime12(T.isha)}
+
+⚠️ জেলাভেদে কয়েক মিনিট আগে-পরে হতে পারে। স্থানীয় মসজিদের সময় অনুসরণ করুন।
+
+${ask('prayer', seedOf(page, t, 'p'))}
+
+${hashtags(page, 'prayer')}`);
 }
 
-export function captionNewsList(page, t, title, items) {
-  const list = items.map((it, i) => `${bn(i + 1)}. ${it.title}${it.source ? ` (${it.source})` : ''}`).join('\n');
-  return `📰 ${title} — ${bnDate(t)}\n\n${list}\n\nশিরোনামগুলো সংশ্লিষ্ট সংবাদমাধ্যম থেকে সংকলিত। বিস্তারিত পড়তে মূল সংবাদমাধ্যম দেখুন।\n\n${tags(page, ['খবর', 'বাংলাদেশ'])}`;
+export function captionNewsList(page, t, title, items, topic = 'news') {
+  const list = items.map((it, i) => `${bn(i + 1)}. ${noLinks(it.title)}${it.source ? ` — ${noLinks(it.source)}` : ''}`).join('\n');
+  return finalize(`📰 ${title} | ${bnDate(t)}
+এক নজরে দিনের গুরুত্বপূর্ণ সব খবর 👇
+
+${list}
+
+(শিরোনামগুলো উল্লিখিত সংবাদমাধ্যম থেকে সংকলিত)
+
+${ask('list', seedOf(page, t, title))}
+${followLine(page)}
+
+${hashtags(page, topic)}`);
 }
 
-export function captionSingle(page, t, label, item) {
-  return `${label === 'ব্রেকিং' ? '🔴' : '📰'} ${item.title}\n\nসূত্র: ${item.source || 'সংশ্লিষ্ট সংবাদমাধ্যম'}\n📅 ${bnDate(t)}\n\nআপনার মতামত কমেন্টে জানান।\n\n${tags(page, [label.replace(/\s+/g, '')])}`;
+export function captionSingle(page, t, label, item, topic = 'news') {
+  const isBreaking = /ব্রেকিং/.test(label) || topic === 'breaking';
+  return finalize(`${isBreaking ? '🔴 ব্রেকিং নিউজ' : `📰 ${label}`}
+
+${noLinks(item.title)}
+
+🗞️ সূত্র: ${noLinks(item.source || 'সংশ্লিষ্ট সংবাদমাধ্যম')}
+📅 ${bnDate(t)}
+
+${ask('news', seedOf(page, t, item.title))}
+${followLine(page)}
+
+${hashtags(page, isBreaking ? 'breaking' : topic)}`);
 }

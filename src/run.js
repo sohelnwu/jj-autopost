@@ -9,7 +9,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { dhakaNow, pick } from './util.js';
 import { loadConfig, loadState, saveState, computeDue, postKey } from './due.js';
 import { getWeather, getPrayer, getHeadlines, SAMPLE } from './data.js';
-import * as T from './templates.js';
+import * as T from './cards.js';
 import * as C from './captions.js';
 import { renderCard, closeBrowser } from './render.js';
 import { postPhoto, postReel } from './facebook.js';
@@ -63,6 +63,8 @@ function feedUrl(key) {
   return f.url || `https://news.google.com/rss/search?q=${encodeURIComponent(`${f.q} when:1d`)}&hl=bn&gl=BD&ceid=BD:bn`;
 }
 
+const topicOf = (k) => (['sports', 'cricket', 'football'].includes(k) ? 'sports' : k === 'politics' ? 'politics' : 'news');
+
 async function build({ page, post }) {
   const base = { page, t, sample };
   switch (post.type) {
@@ -83,14 +85,14 @@ async function build({ page, post }) {
       const items = sample ? SAMPLE.headlines.slice(0, count) : await once(`n|${post.news}|${count}`, () => getHeadlines(feedUrl(post.news), count));
       if (items.length < 3) throw new Error(`"${post.news}" বিভাগে যথেষ্ট খবর পাওয়া যায়নি`);
       const title = post.title || cfg.news[post.news]?.label || 'খবর';
-      return { html: T.newsList({ ...base, title, items }), caption: C.captionNewsList(page, t, title, items) };
+      return { html: T.newsList({ ...base, title, items }), caption: C.captionNewsList(page, t, title, items, topicOf(post.news)) };
     }
     case 'single-news': {
       const used = new Set(state.headlines[page.id] || []);
       const items = sample ? SAMPLE.headlines.slice(2, 3) : await getHeadlines(feedUrl(post.news), 1, used);
       if (!items.length) throw new Error(`"${post.news}" বিভাগে নতুন খবর পাওয়া যায়নি`);
       const label = post.label || cfg.news[post.news]?.label || 'খবর';
-      return { html: T.singleNews({ ...base, label, item: items[0] }), caption: C.captionSingle(page, t, label, items[0]), headlineKey: items[0].key };
+      return { html: T.singleNews({ ...base, label, item: items[0], breaking: !!post.breaking }), caption: C.captionSingle(page, t, post.breaking ? 'ব্রেকিং' : label, items[0], topicOf(post.news)), headlineKey: items[0].key };
     }
     // ---------- রিল ----------
     case 'reel-news': {
@@ -98,13 +100,13 @@ async function build({ page, post }) {
       const items = sample ? SAMPLE.headlines.slice(0, count) : await once(`n|${post.news}|${count}`, () => getHeadlines(feedUrl(post.news), count));
       if (items.length < 3) throw new Error(`"${post.news}" বিভাগে যথেষ্ট খবর পাওয়া যায়নি`);
       const label = cfg.news[post.news]?.label || 'খবর';
-      return { reel: R.reelNews(base, { title: post.title || `${label}: সেরা ${items.length}`, label, items }) };
+      return { reel: R.reelNews(base, { title: post.title || `${label}: সেরা ${items.length}`, label, items, topic: topicOf(post.news) }) };
     }
     case 'reel-breaking': {
       const used = new Set(state.headlines[page.id] || []);
       const items = sample ? SAMPLE.headlines.slice(0, 1) : await getHeadlines(feedUrl(post.news), 1, used);
       if (!items.length) throw new Error(`"${post.news}" বিভাগে নতুন খবর পাওয়া যায়নি`);
-      return { reel: R.reelBreaking(base, { item: items[0] }), headlineKey: items[0].key };
+      return { reel: R.reelBreaking(base, { item: items[0], topic: topicOf(post.news) }), headlineKey: items[0].key };
     }
     case 'reel-weather-prayer': {
       const w = sample ? SAMPLE.weather : await once(`w|${page.weatherCity?.name}`, () => getWeather(page.weatherCity));
