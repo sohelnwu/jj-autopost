@@ -45,6 +45,9 @@ if (hasAnyToken() && !sample) {
 }
 const credFor = (page) => creds[page.id] || null;
 if (opt('type') === 'check-tokens') {
+  const { geminiKeyCount } = await import('./voice.js');
+  console.log(`🔊 Gemini কী পাওয়া গেছে: ${geminiKeyCount}টা`);
+  if (process.env.GITHUB_ACTIONS) console.log(`::notice title=Gemini কী::${geminiKeyCount}টা কী পাওয়া গেছে`);
   console.log(hasAnyToken() ? `\n${Object.keys(creds).length}টি পেজের টোকেন ঠিক আছে।` : 'FB_PAGE_TOKENS Secret সেট করা নেই।');
   process.exit(0);
 }
