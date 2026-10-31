@@ -12,7 +12,12 @@ const HOT = ['ব্রেকিং', 'নিহত', 'মৃত্যু', 'আ
   'জয়', 'হার', 'জিতল', 'হারল', 'রেকর্ড', 'শিরোপা', 'ফাইনাল', 'সেঞ্চুরি', 'গোল', 'বিশ্বকাপ', 'টাইগার', 'সাকিব', 'মুশফিক', 'তামিম', 'মেসি', 'রোনালদো', 'নেইমার',
   'প্রধান উপদেষ্টা', 'প্রধানমন্ত্রী', 'রাষ্ট্রপতি', 'নির্বাচন', 'ইসি', 'হাইকোর্ট', 'রায়', 'ঘোষণা', 'দাম বাড়', 'দাম কম', 'বেতন', 'ছুটি', 'চাকরি',
   'ভাইরাল', 'চাঞ্চল্যকর', 'প্রথমবার', 'অভিনেত্রী', 'অভিনেতা', 'নায়ক', 'নায়িকা', 'বিয়ে', 'তালাক', 'সিনেমা', 'গায়ক'];
-const SKIP = ['মতামত', 'সম্পাদকীয়', 'রাশিফল', 'বিজ্ঞাপন', 'স্পন্সর', 'কুইজ', 'লাইভ আপডেট', 'ছবিতে দেখুন', 'ভিডিও দেখুন', 'দেখে নিন'];
+const SKIP = ['বার্ষিকী', 'স্মরণে', 'শ্রদ্ধাঞ্জলি', 'শ্রদ্ধা নিবেদন', 'আলোচনা সভা', 'দোয়া মাহফিল', 'মতামত', 'সম্পাদকীয়', 'রাশিফল', 'বিজ্ঞাপন', 'স্পন্সর', 'কুইজ', 'লাইভ আপডেট', 'ছবিতে দেখুন', 'ভিডিও দেখুন', 'দেখে নিন'];
+
+// ছোট শব্দ (জয়, হার, গোল, রায়…) যেন অন্য শব্দের ভেতরে মিলে না যায় — আলাদা শব্দ হিসেবে মেলানো
+const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const HOT_RX = HOT.map((w) => (w.length <= 4 ? new RegExp(`(^|[\\s,।:'"‘“])${esc(w)}(ে|ের|য়|ী)?(?=$|[\\s,।:!?'"’”])`) : new RegExp(esc(w))));
+const hotCount = (t) => HOT_RX.filter((rx) => rx.test(t)).length;
 
 async function fetchFeed(url) {
   try {
@@ -41,13 +46,14 @@ export function scoreItem(it, now = Date.now()) {
   s += Math.min(it.coverage || 1, 8) * 6;        // কভারেজ
   s += Math.max(0, 20 - (it.rank || 0) * 2);       // ফিডে অবস্থান
   s += Math.max(0, 18 - ageH * 5);                 // নতুনত্ব
-  s += HOT.filter((w) => title.includes(w)).length * 7;
+  s += hotCount(title) * 7;
+  if ((it.coverage || 1) < 2 && hotCount(title) === 0) s -= 15; // একা একটা সূত্রের সাধারণ খবর — ব্রেকিং নয়
   if (/[?？]$/.test(title)) s -= 6;                  // প্রশ্নবোধক শিরোনাম সাধারণত মতামতধর্মী
   return s;
 }
 
 // feeds: [{ url, label }]  used: আগে দেওয়া খবরের key-র Set
-export async function pickBreaking(feeds, used, { minScore = 30 } = {}) {
+export async function pickBreaking(feeds, used, { minScore = 45 } = {}) {
   const lists = await Promise.all(feeds.map(async (f) => (await fetchFeed(f.url)).map((it) => ({ ...it, label: f.label, topic: f.topic }))));
   const now = Date.now();
   const seen = new Set();

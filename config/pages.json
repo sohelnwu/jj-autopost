@@ -87,7 +87,7 @@
         "minGapMinutes": 75,
         "afterScheduledMinutes": 40,
         "reelEvery": 3,
-        "minScore": 30,
+        "minScore": 45,
         "feeds": [
           "top",
           "bangladesh",
