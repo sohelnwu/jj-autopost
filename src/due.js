@@ -19,17 +19,15 @@ export function saveState(s) {
 
 export const postKey = (page, post) => `${page.id}|${post.time}|${post.type}|${post.news || post.lines || ''}`;
 
-export function computeDue(cfg, state, now = dhakaNow()) {
+// allowed: যেসব পেজের টোকেন আছে তাদের id-র Set (null হলে সব পেজ)
+export function computeDue(cfg, state, now = dhakaNow(), allowed = null) {
   const nowMin = now.h * 60 + now.min;
   const done = new Set(state.days[now.iso] || []);
   const window = (cfg.catchUpHours ?? 3) * 60;
-  // টোকেন দেওয়া থাকলে, যেসব পেজের টোকেন নেই সেগুলো বাদ (অযথা কার্ড বানিয়ে সময় নষ্ট না করার জন্য)
-  let withTokens = null;
-  try { if (process.env.FB_PAGE_TOKENS) withTokens = new Set(Object.keys(JSON.parse(process.env.FB_PAGE_TOKENS))); } catch {}
   const due = [];
   for (const page of cfg.pages) {
     if (page.enabled === false) continue;
-    if (withTokens && !withTokens.has(page.id)) continue;
+    if (allowed && !allowed.has(page.id)) continue;
     for (const post of page.posts || []) {
       const [h, m] = post.time.split(':').map(Number);
       const sched = h * 60 + m;
@@ -41,9 +39,17 @@ export function computeDue(cfg, state, now = dhakaNow()) {
 
 // সরাসরি চালালে: GitHub Actions-কে জানায় কিছু পোস্ট করার আছে কিনা
 if (process.argv[1]?.endsWith('due.js')) {
-  // টোকেন Secret না থাকলে শিডিউলে কিছুই চালাবে না (ফ্রি মিনিট বাঁচাতে)
-  const due = process.env.FB_PAGE_TOKENS ? computeDue(loadConfig(), loadState()) : [];
-  if (!process.env.FB_PAGE_TOKENS) console.log('FB_PAGE_TOKENS Secret এখনো সেট করা হয়নি — তাই কিছু চালানো হচ্ছে না।');
-  console.log(due.length ? `এখন ${due.length}টি পোস্ট বাকি:\n` + due.map((d) => `  ${d.page.name} — ${d.post.time} ${d.post.type} ${d.post.news || ''}`).join('\n') : 'এখন কোনো পোস্টের সময় হয়নি।');
+  const { resolveTokens, hasAnyToken } = await import('./tokens.js');
+  let due = [];
+  if (!hasAnyToken()) {
+    console.log('FB_PAGE_TOKENS Secret এখনো সেট করা হয়নি — তাই কিছু চালানো হচ্ছে না।');
+  } else {
+    const cfg = loadConfig();
+    let creds = {};
+    try { creds = await resolveTokens(cfg); } catch (e) { console.log(`⚠️ ${e.message}`); }
+    console.log(`টোকেন মিলেছে: ${Object.keys(creds).join(', ') || 'কোনো পেজের সাথে মেলেনি'}`);
+    due = computeDue(cfg, loadState(), dhakaNow(), new Set(Object.keys(creds)));
+    console.log(due.length ? `এখন ${due.length}টি পোস্ট বাকি:\n` + due.map((d) => `  ${d.page.name} — ${d.post.time} ${d.post.type} ${d.post.news || d.post.lines || ''}`).join('\n') : 'এখন কোনো পোস্টের সময় হয়নি।');
+  }
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `has_due=${due.length ? 'true' : 'false'}\n`);
 }

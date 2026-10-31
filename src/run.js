@@ -13,6 +13,7 @@ import * as T from './templates.js';
 import * as C from './captions.js';
 import { renderCard, closeBrowser } from './render.js';
 import { postPhoto, postReel } from './facebook.js';
+import { resolveTokens, hasAnyToken } from './tokens.js';
 import * as R from './reels.js';
 import { REEL_SIZE } from './reel-slides.js';
 import { tts, buildReel } from './video.js';
@@ -27,19 +28,25 @@ const t = dhakaNow();
 const sample = flag('sample');
 const dry = flag('dry') || process.env.DRY_RUN === 'true';
 
-// টোকেন: FB_PAGE_TOKENS = {"jj-news": {"id": "123", "token": "EAA..."}, ...}
-let tokens = {};
-try { tokens = JSON.parse(process.env.FB_PAGE_TOKENS || '{}'); } catch { console.error('⚠️ FB_PAGE_TOKENS সঠিক JSON নয়।'); }
-const credFor = (page) => {
-  const v = tokens[page.id];
-  if (!v) return null;
-  if (typeof v === 'string') return page.pageId ? { id: page.pageId, token: v } : null;
-  return { id: v.id || page.pageId, token: v.token };
-};
+// টোকেন: FB_PAGE_TOKENS Secret (ধরনগুলো src/tokens.js-এ লেখা আছে)
+let creds = {};
+if (hasAnyToken() && !sample) {
+  try { creds = await resolveTokens(cfg); } catch (e) { console.error(`⚠️ ${e.message}`); }
+  for (const p of cfg.pages) {
+    const c = creds[p.id];
+    console.log(c ? `🔑 ${p.name} → ফেসবুক পেজ "${c.fbName}" (id ${c.id})` : `🔑 ${p.name} → টোকেন নেই`);
+    if (process.env.GITHUB_ACTIONS) console.log(`::notice title=টোকেন যাচাই::${p.name} → ${c ? `"${c.fbName}" (id ${c.id})` : 'টোকেন নেই'}`);
+  }
+}
+const credFor = (page) => creds[page.id] || null;
+if (opt('type') === 'check-tokens') {
+  console.log(hasAnyToken() ? `\n${Object.keys(creds).length}টি পেজের টোকেন ঠিক আছে।` : 'FB_PAGE_TOKENS Secret সেট করা নেই।');
+  process.exit(0);
+}
 
 // কোন কাজগুলো চালাতে হবে
 let jobs;
-if (flag('due')) jobs = computeDue(cfg, state, t);
+if (flag('due')) jobs = computeDue(cfg, state, t, new Set(Object.keys(creds)));
 else {
   const pages = cfg.pages.filter((p) => !opt('page') || opt('page') === 'all' || p.id === opt('page'));
   jobs = pages.flatMap((page) => (page.posts || []).filter((p) => !opt('type') || p.type === opt('type')).map((post) => ({ page, post })));

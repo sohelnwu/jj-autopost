@@ -18,7 +18,7 @@ on:
         description: 'কোন কার্ড? (খালি রাখলে সব)'
         type: choice
         default: ''
-        options: ['', 'good-morning', 'weather', 'prayer', 'news-list', 'single-news', 'reel-news', 'reel-breaking', 'reel-weather-prayer', 'reel-morning', 'reel-lines']
+        options: ['', 'check-tokens', 'good-morning', 'weather', 'prayer', 'news-list', 'single-news', 'reel-news', 'reel-breaking', 'reel-weather-prayer', 'reel-morning', 'reel-lines']
       dry_run:
         description: 'শুধু কার্ড বানাবে, ফেসবুকে পোস্ট করবে না'
         type: boolean
@@ -53,6 +53,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || steps.due.outputs.has_due == 'true'
         run: |
           npm ci
+          if [ "${{ inputs.type }}" = "check-tokens" ]; then exit 0; fi
           npx playwright install --with-deps chromium
           which ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
           pip install --quiet --user --break-system-packages edge-tts || pipx install edge-tts || echo "edge-tts ইনস্টল হয়নি — রিল ভয়েস ছাড়া হবে"

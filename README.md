@@ -39,24 +39,39 @@
 2. এই ফোল্ডারের সব ফাইল সেখানে আপলোড করুন (`.github` ফোল্ডারসহ — এটা না থাকলে অটোমেশন চলবে না)।
    ফোন থেকে `.github` ফোল্ডার আপলোড ঝামেলার হতে পারে, কম্পিউটার থেকে করা সহজ। চাইলে খালি রিপো বানিয়ে নামটা Claude-কে দিন, সে নিজেই পুশ করে দিতে পারবে।
 
-### ধাপ ২ — Facebook App ও পেজ টোকেন
-1. [developers.facebook.com](https://developers.facebook.com) → **My Apps → Create App** → ধরন **Business** (বা "Other")। নাম যেমন `JJ AutoPost`।
-2. App-এর **Settings → Basic** থেকে **App ID** ও **App Secret** নিন।
-3. [Graph API Explorer](https://developers.facebook.com/tools/explorer) খুলুন → ডানে আপনার App বেছে নিন → **Permissions**-এ যোগ করুন:
-   `pages_show_list`, `pages_manage_posts`, `pages_read_engagement` → **Generate Access Token** → যেসব পেজে পোস্ট চান সেগুলো সিলেক্ট করুন।
-4. `tools/token-helper.html` ফাইলটা ব্রাউজারে খুলুন → App ID, App Secret আর ওই টোকেন দিন → প্রতিটা পেজের পাশে id লিখুন (`jj-news`, `jj-sports` ইত্যাদি, `config/pages.json`-এর সাথে মিলিয়ে) → **GitHub Secret বানাও** → কপি করুন।
+### ধাপ ২ — Facebook App ও পেজ টোকেন (মোবাইল থেকেও করা যায়)
+মোবাইলে Chrome-এ ⋮ মেনু থেকে **Desktop site** চালু করে নিন। নিচের পাতাগুলো মোবাইল ভিউতে ঠিকমতো আসে না।
 
-> নিজের পেজে নিজের App দিয়ে পোস্ট করতে App Review লাগার কথা নয় বলে আমার ধারণা, তবে Facebook নিয়ম বদলায় — প্রথম টেস্টেই বোঝা যাবে। "দীর্ঘমেয়াদি ইউজার টোকেন থেকে পাওয়া পেজ টোকেনের মেয়াদ শেষ হয় না" — এটাও আমার জানা তথ্য, হেল্পার পাতায় মেয়াদ যাচাই করে দেখায়। পাসওয়ার্ড বদলালে বা App সরালে টোকেন বাতিল হতে পারে, তখন ধাপ ২ আবার করবেন।
+1. **ডেভেলপার অ্যাকাউন্ট:** [developers.facebook.com](https://developers.facebook.com) → Get Started। ফোন নম্বর যাচাই চাইতে পারে।
+2. **App বানানো:** My Apps → **Create App** → নাম `JJ AutoPost`। Use case জিজ্ঞেস করলে পেজ পরিচালনা সংক্রান্ত অপশন, না পেলে **Other** → ধরন **Business**। (মেনুর নাম সময়ের সাথে বদলায়।)
+3. **টোকেন নেওয়া:** [Graph API Explorer](https://developers.facebook.com/tools/explorer) → ডানে **Meta App**-এ `JJ AutoPost` → **Add a permission**-এ এই তিনটা: `pages_show_list`, `pages_manage_posts`, `pages_read_engagement` → **Generate Access Token** → যেসব পেজে অটো পোস্ট চান সবগুলো টিক দিন → Done। (এই টোকেন প্রায় ১ ঘণ্টা টেকে।)
+4. **মেয়াদ বাড়ানো:** টোকেনের পাশের **ⓘ** → **Open in Access Token Tool** → নিচে **Extend Access Token** → নতুন যে লম্বা টোকেন আসে সেটা কপি করুন (প্রায় ২ মাস টেকে)।
+5. **পেজ টোকেন:** Explorer-এ ফিরে Access Token ঘরে ওই নতুন টোকেন বসান → উপরের ঘরে লিখুন `me/accounts` → **Submit**। নিচে প্রতিটা পেজের নাম, id আর access_token আসবে। এই পেজ টোকেনগুলোর মেয়াদ সাধারণত শেষ হয় না।
+6. **পুরো লেখাটা কপি করুন** — শুরুর `{` থেকে শেষের `}` পর্যন্ত।
+
+> নিজে পরীক্ষা করতে চাইলে: যেকোনো একটা পেজ টোকেন [Access Token Debugger](https://developers.facebook.com/tools/debug/accesstoken/)-এ বসিয়ে Debug দিন — **Expires: Never** দেখালে ঠিক আছে।
+> ফেসবুকের পাসওয়ার্ড বদলালে বা পেজের অ্যাডমিন থেকে সরলে টোকেন বাতিল হয়। তখন ধাপ ৩–৬ আবার করে Secret আপডেট করবেন।
 
 ### ধাপ ৩ — GitHub Secret রাখা
 রিপো → **Settings → Secrets and variables → Actions → New repository secret**
 - Name: `FB_PAGE_TOKENS`
-- Secret: হেল্পার থেকে কপি করা পুরো লেখা
+- Secret: ধাপ ২-এ কপি করা পুরো লেখা
+
+কোন টোকেন কোন পেজের, সেটা ফেসবুক পেজের **নাম** দেখে নিজে মিলিয়ে নেয় (`config/pages.json`-এর `name`)। ফেসবুকে পেজের নাম আলাদা হলে সেই পেজের ব্লকে `"fbName": "ফেসবুকের হুবহু নাম"` বা `"pageId": "id"` লিখে দিন।
+(কম্পিউটার থাকলে `tools/token-helper.html` দিয়েও এই কাজ করা যায়।)
+
+### ধাপ ৩.৫ — টোকেন যাচাই
+Actions → JJ AutoPost → Run workflow → type: **check-tokens** → Run। ১–২ মিনিটে রানের পাতায় দেখাবে কোন পেজ কোন ফেসবুক পেজের সাথে মিলেছে। কিছু পোস্ট হয় না।
+
+### ধাপ ৩.৬ — App-কে Live করা (জরুরি)
+App **Development** মোডে থাকলে API দিয়ে করা পোস্ট শুধু আপনি দেখবেন, অন্যরা দেখবে না। তাই App Dashboard-এ মোড **Live** করে দিন। Live করতে **Privacy Policy URL** চাইতে পারে (App settings → Basic)।
 
 ### ধাপ ৪ — প্রথমে টেস্ট (পোস্ট হবে না)
 রিপো → **Actions** → **JJ AutoPost** → **Run workflow** → `dry_run` টিক দেওয়া রেখে Run।
 শেষ হলে রানটা খুলুন → নিচে **Artifacts** থেকে `cards-...` ডাউনলোড করে কার্ডগুলো দেখুন। আসল আবহাওয়া, নামাজের সময় আর খবর ঠিক আসছে কিনা এখানেই মিলিয়ে নিন।
 
+> প্রথম আসল পোস্ট টেস্ট: page = `jj-official`, type = `good-morning`, `dry_run` টিক তুলে দিয়ে Run — শুধু একটা কার্ড পোস্ট হবে।
+>
 > ⚠️ হাতে চালানোর সময় `dry_run`-এর টিক তুলে দিলে বেছে নেওয়া পেজের **সব কার্ড একসাথে** পোস্ট হয়ে যাবে। একটা কার্ড পরীক্ষা করতে `page` ও `type` দুটোই নির্দিষ্ট করে দিন।
 
 ### ধাপ ৫ — চালু
