@@ -1,4 +1,5 @@
 {
+  "paused": true,
   "graphVersion": "v23.0",
   "catchUpHours": 3,
   "news": {
@@ -108,7 +109,8 @@
         { "time": "17:00", "type": "single-news", "news": "football" },
         { "time": "19:00", "type": "reel-news", "news": "sports", "count": 5 },
         { "time": "20:00", "type": "news-list", "news": "cricket", "count": 5, "title": "আজকের ক্রিকেট" }
-      ]
+      ],
+      "enabled": false
     },
     {
       "id": "jj-official",

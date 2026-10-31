@@ -24,6 +24,7 @@ export function computeDue(cfg, state, now = dhakaNow(), allowed = null) {
   const nowMin = now.h * 60 + now.min;
   const done = new Set(state.days[now.iso] || []);
   const window = (cfg.catchUpHours ?? 3) * 60;
+  if (cfg.paused) return []; // config-এ "paused": true থাকলে অটো পোস্ট বন্ধ
   const due = [];
   for (const page of cfg.pages) {
     if (page.enabled === false) continue;
