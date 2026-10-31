@@ -48,7 +48,7 @@ if (opt('type') === 'check-tokens') {
 let jobs;
 if (flag('due')) jobs = computeDue(cfg, state, t, new Set(Object.keys(creds)));
 else {
-  const pages = cfg.pages.filter((p) => !opt('page') || opt('page') === 'all' || p.id === opt('page'));
+  const pages = cfg.pages.filter((p) => (opt('page') && opt('page') !== 'all') ? p.id === opt('page') : p.enabled !== false);
   jobs = pages.flatMap((page) => (page.posts || []).filter((p) => !opt('type') || p.type === opt('type')).map((post) => ({ page, post })));
 }
 if (!jobs.length) { console.log('করার মতো কিছু নেই।'); process.exit(0); }
