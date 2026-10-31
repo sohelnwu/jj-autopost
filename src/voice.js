@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, statSync, writeFileSync } from 'node:fs';
 
 const KEY = () => process.env.GEMINI_API_KEY || '';
+const TRIM = 'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse';
 let geminiBroken = false;
 let edgeBroken = false;
 export const voiceStatus = { used: new Set(), notes: new Set() };
@@ -14,12 +15,12 @@ const STYLE = {
   warm: 'Read the following Bengali (Bangla, Bangladesh) text aloud exactly as written, in a warm, natural, heartfelt human voice at a calm pace. Do not add or skip any words.',
 };
 
-async function gemini(text, outWav, { voice = 'Charon', style = 'news', models } = {}) {
+async function gemini(text, outWav, { voice = 'Charon', style = 'news', models, trim = true } = {}) {
   if (!KEY() || geminiBroken) return null;
   const list = models || (process.env.GEMINI_TTS_MODEL ? [process.env.GEMINI_TTS_MODEL] : ['gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-tts', 'gemini-2.5-pro-preview-tts']);
   let lastErr = '';
   for (const model of list) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
           method: 'POST',
@@ -30,14 +31,19 @@ async function gemini(text, outWav, { voice = 'Charon', style = 'news', models }
           }),
         });
         const j = await r.json().catch(() => ({}));
-        if (r.status === 429) { lastErr = 'Gemini সীমা পূর্ণ (429)'; await new Promise((s) => setTimeout(s, 20000)); continue; }
+        if (r.status === 429) {
+          lastErr = 'Gemini সীমা পূর্ণ (429)';
+          const sec = Math.min(65, Number(/retry in ([\d.]+)s/i.exec(j.error?.message || '')?.[1] || 30) + 2);
+          if (attempt < 2) { await new Promise((s) => setTimeout(s, sec * 1000)); continue; }
+          break;
+        }
         if (!r.ok) { lastErr = `${model}: ${j.error?.message || r.status}`; break; }
         const part = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
         if (!part) { lastErr = `${model}: অডিও আসেনি`; break; }
         const pcm = Buffer.from(part.inlineData.data, 'base64');
         const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || '')?.[1] || 24000);
         const raw = outWav + '.pcm'; writeFileSync(raw, pcm);
-        const c = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 's16le', '-ar', String(rate), '-ac', '1', '-i', raw, '-af', 'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse', outWav]);
+        const c = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 's16le', '-ar', String(rate), '-ac', '1', '-i', raw, ...(trim ? ['-af', TRIM] : []), outWav]);
         if (c.status === 0 && existsSync(outWav)) { voiceStatus.used.add('Gemini'); return outWav; }
         lastErr = 'অডিও রূপান্তর ব্যর্থ'; break;
       } catch (e) { lastErr = e.message; break; }
@@ -65,4 +71,57 @@ function edge(text, outMp3, { voice = 'bn-BD-PradeepNeural', rate = '+8%' } = {}
 export async function speak(text, base, opts = {}) {
   if (!text) return null;
   return (await gemini(text, `${base}.wav`, { voice: opts.geminiVoice, style: opts.style })) || edge(text, `${base}.mp3`, { voice: opts.edgeVoice, rate: opts.edgeRate });
+}
+
+// একটা লম্বা অডিওকে n ভাগে ভাগ: সবচেয়ে লম্বা n-1টা বিরতিতে কাটা (না পেলে লেখার দৈর্ঘ্যের অনুপাতে)
+export function splitBySilence(wav, lens, base) {
+  const n = lens.length;
+  const total = Number(spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', wav], { encoding: 'utf8' }).stdout) || 0;
+  if (!total) return null;
+  let cuts = [];
+  if (n > 1) {
+    const r = spawnSync('ffmpeg', ['-i', wav, '-af', 'silencedetect=noise=-35dB:d=0.18', '-f', 'null', '-'], { encoding: 'utf8' });
+    const st = [...(r.stderr || '').matchAll(/silence_start: ([\d.]+)/g)].map((m) => +m[1]);
+    const en = [...(r.stderr || '').matchAll(/silence_end: ([\d.]+)/g)].map((m) => +m[1]);
+    const sil = st.map((a, i) => ({ a, b: en[i] ?? total })).filter((x) => x.a > 0.4 && x.b < total - 0.3);
+    const sum = lens.reduce((a, b) => a + b, 0);
+    let acc = 0; const want = lens.slice(0, -1).map((l) => (acc += l) / sum * total); // প্রত্যাশিত কাটার জায়গা
+    if (sil.length >= n - 1) {
+      // প্রতিটা প্রত্যাশিত জায়গার কাছের লম্বা বিরতিটা নেওয়া
+      const used = new Set();
+      cuts = want.map((w) => {
+        let best = -1, bestScore = -1e9;
+        sil.forEach((x, i) => { if (used.has(i)) return; const mid = (x.a + x.b) / 2; const sc = (x.b - x.a) * 4 - Math.abs(mid - w); if (sc > bestScore) { bestScore = sc; best = i; } });
+        used.add(best); return (sil[best].a + sil[best].b) / 2;
+      }).sort((a, b) => a - b);
+    } else cuts = want;
+  }
+  const pts = [0, ...cuts, total];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const f = `${base}-p${i}.wav`;
+    const c = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-af', `atrim=${pts[i].toFixed(3)}:${pts[i + 1].toFixed(3)},asetpts=PTS-STARTPTS,${TRIM}`, f]);
+    if (c.status !== 0) return null;
+    out.push(f);
+  }
+  return out;
+}
+
+// কয়েকটা অংশের ভয়েস — সব অংশ একই কণ্ঠে (Gemini একবারে, না হলে সব Microsoft)
+export async function speakSegments(texts, base, opts = {}) {
+  const idx = texts.map((t, i) => (t ? i : -1)).filter((i) => i >= 0);
+  const res = texts.map(() => null);
+  if (!idx.length) return res;
+  if (KEY() && !geminiBroken) {
+    const full = idx.map((i) => texts[i].trim()).join('\n\n');
+    const wav = await gemini(full, `${base}-all.wav`, { voice: opts.geminiVoice, style: opts.style, trim: false });
+    if (wav) {
+      const parts = splitBySilence(wav, idx.map((i) => texts[i].length), base);
+      if (parts) { idx.forEach((i, k) => { res[i] = parts[k]; }); return res; }
+      voiceStatus.used.delete('Gemini');
+    }
+  }
+  for (const i of idx) res[i] = edge(texts[i], `${base}-${i}.mp3`, { voice: opts.edgeVoice, rate: opts.edgeRate });
+  if (res.some((x, i) => texts[i] && !x)) return texts.map(() => null); // অর্ধেক কণ্ঠ রাখার চেয়ে মিউজিক ভালো
+  return res;
 }

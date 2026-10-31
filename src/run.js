@@ -17,7 +17,7 @@ import { resolveTokens, hasAnyToken } from './tokens.js';
 import * as R from './reels.js';
 import { REEL_SIZE } from './reel-slides.js';
 import { buildReel } from './video.js';
-import { speak, voiceStatus } from './voice.js';
+import { speakSegments, voiceStatus } from './voice.js';
 import { buildNewsReel } from './newsreel.js';
 import { pickBreaking } from './breaking.js';
 import { firstComment } from './facebook.js';
@@ -166,10 +166,10 @@ async function makeReel(page, reel, name) {
   mkdirSync(dir, { recursive: true });
   const voice = page.reelVoice || cfg.reelVoice || 'bn-BD-NabanitaNeural';
   const slides = [];
+  const auds = await speakSegments(reel.slides.map((s) => s.say || ''), `${dir}/s`, { style: page.id === 'jj-news' ? 'news' : 'warm', geminiVoice: page.geminiVoice || (page.id === 'jj-news' ? 'Charon' : 'Aoede'), edgeVoice: voice, edgeRate: cfg.reelVoiceRate || '+0%' });
   for (const [i, s] of reel.slides.entries()) {
     const png = await renderCard(s.html, `${dir}/s${i}.png`, REEL_SIZE);
-    const mp3 = s.say ? await speak(s.say, `${dir}/s${i}`, { style: page.id === 'jj-news' ? 'news' : 'warm', geminiVoice: page.geminiVoice || (page.id === 'jj-news' ? 'Charon' : 'Aoede'), edgeVoice: voice, edgeRate: cfg.reelVoiceRate || '+0%' }) : null;
-    slides.push({ png, voice: mp3, min: s.min });
+    slides.push({ png, voice: auds[i], min: s.min });
   }
   const out = buildReel(slides, `${outDir}/${name}.mp4`, `${t.iso}|${page.id}|${name}`);
   const voiced = slides.filter((x) => x.voice).length;

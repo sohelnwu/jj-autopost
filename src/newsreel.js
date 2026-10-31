@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { FONTS } from './templates.js';
 import { noLinks } from './design.js';
-import { speak } from './voice.js';
+import { speakSegments } from './voice.js';
 import { duration } from './video.js';
 import { pick } from './util.js';
 
@@ -69,10 +69,8 @@ export async function buildNewsReel(opts) {
   segs.push({ kind: 'outro', say: opts.breaking ? `বিস্তারিত আসছে। সঙ্গেই থাকুন ${page.name}-এর।` : `আরও খবরের জন্য ${page.name}-এর সঙ্গেই থাকুন।`, min: 2.6 });
 
   // ---------- ভয়েস ----------
-  for (const [i, s] of segs.entries()) {
-    s.audio = await speak(s.say, `${dir}/v${i}`, { style: 'news', ...opts.voice });
-    s.adur = s.audio ? duration(s.audio) : 0;
-  }
+  const auds = await speakSegments(segs.map((s) => s.say), `${dir}/v`, { style: 'news', ...opts.voice });
+  segs.forEach((s, i) => { s.audio = auds[i]; s.adur = s.audio ? duration(s.audio) : 0; });
   // ---------- সময়রেখা ----------
   let cur = 0.3;
   for (const s of segs) {
