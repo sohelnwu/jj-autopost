@@ -1,5 +1,5 @@
 # JJ Network অটো পোস্ট
-# প্রতি ঘণ্টায় একবার চলে (UTC মিনিট ১৭ = বাংলাদেশ সময় প্রতি ঘণ্টার ১৭ মিনিটে)।
+# প্রতি ৩০ মিনিটে চলে (ঘণ্টার ১৭ ও ৪৭ মিনিটে) — নির্ধারিত পোস্ট আর ব্রেকিং নিউজ দেখার জন্য।
 # config/pages.json-এ যে পোস্টের সময় হয়েছে শুধু সেগুলো বানিয়ে ফেসবুকে পোস্ট করে।
 # GitHub-এর শিডিউল কখনো কখনো কয়েক মিনিট থেকে বেশি দেরিতে চলতে পারে।
 
@@ -7,7 +7,7 @@ name: JJ AutoPost
 
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17,47 * * * *'
   workflow_dispatch:
     inputs:
       page:
@@ -18,7 +18,7 @@ on:
         description: 'কোন কার্ড? (খালি রাখলে সব)'
         type: choice
         default: ''
-        options: ['', 'check-tokens', 'good-morning', 'weather', 'prayer', 'news-list', 'single-news', 'reel-news', 'reel-breaking', 'reel-weather-prayer', 'reel-morning', 'reel-lines']
+        options: ['', 'check-tokens', 'breaking-auto', 'good-night', 'good-morning', 'weather', 'prayer', 'news-list', 'single-news', 'reel-news', 'reel-breaking', 'reel-weather-prayer', 'reel-morning', 'reel-lines']
       dry_run:
         description: 'শুধু কার্ড বানাবে, ফেসবুকে পোস্ট করবে না'
         type: boolean

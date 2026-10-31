@@ -1,7 +1,7 @@
 {
   "paused": false,
   "graphVersion": "v23.0",
-  "catchUpHours": 3,
+  "catchUpHours": 2,
   "news": {
     "top": {
       "label": "আজকের সেরা খবর",
@@ -73,17 +73,32 @@
       "posts": [
         { "time": "06:00", "type": "prayer" },
         { "time": "07:00", "type": "good-morning" },
-        { "time": "08:00", "type": "weather" },
-        { "time": "09:00", "type": "reel-weather-prayer" },
-        { "time": "11:00", "type": "single-news", "news": "top" },
-        { "time": "13:00", "type": "news-list", "news": "bangladesh", "count": 5 },
-        { "time": "14:00", "type": "reel-breaking", "news": "top", "breaking": true },
-        { "time": "16:00", "type": "single-news", "news": "sports" },
-        { "time": "18:00", "type": "news-list", "news": "politics", "count": 5 },
-        { "time": "19:00", "type": "reel-news", "news": "top", "count": 5, "title": "আজকের সেরা ৫ খবর" },
-        { "time": "21:00", "type": "news-list", "news": "top", "count": 10, "title": "আজকের সেরা ১০ খবর" }
+        { "time": "08:00", "type": "reel-weather-prayer" },
+        { "time": "13:00", "type": "reel-news", "news": "top", "count": 5, "title": "দুপুরের সেরা ৫ খবর" },
+        { "time": "21:00", "type": "news-list", "news": "top", "count": 10, "title": "আজকের সেরা ১০ খবর" },
+        { "time": "22:30", "type": "good-night" }
       ],
-      "reelVoice": "bn-BD-PradeepNeural"
+      "reelVoice": "bn-BD-PradeepNeural",
+      "breaking": {
+        "enabled": true,
+        "from": "09:00",
+        "to": "22:00",
+        "maxPerDay": 8,
+        "minGapMinutes": 75,
+        "afterScheduledMinutes": 40,
+        "reelEvery": 3,
+        "minScore": 30,
+        "feeds": [
+          "top",
+          "bangladesh",
+          "politics",
+          "sports",
+          "cricket",
+          "football",
+          "entertainment",
+          "world"
+        ]
+      }
     },
     {
       "id": "jj-sports",
@@ -132,16 +147,17 @@
       },
       "posts": [
         { "time": "07:00", "type": "reel-morning" },
-        { "time": "08:00", "type": "good-morning" },
         { "time": "10:00", "type": "weather" },
         { "time": "12:00", "type": "reel-lines", "lines": "motivation", "count": 3 },
         { "time": "16:00", "type": "reel-lines", "lines": "fun", "count": 3 },
         { "time": "20:00", "type": "reel-lines", "lines": "love", "count": 3 },
-        { "time": "22:00", "type": "reel-lines", "lines": "feelings", "count": 3 }
+        { "time": "22:00", "type": "reel-lines", "lines": "feelings", "count": 3 },
+        { "time": "23:00", "type": "good-night" }
       ],
       "reelVoice": "bn-BD-NabanitaNeural"
     }
   ],
   "reelVoice": "bn-BD-NabanitaNeural",
-  "reelVoiceRate": "-5%"
+  "reelVoiceRate": "-5%",
+  "firstComment": true
 }

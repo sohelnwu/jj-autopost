@@ -123,3 +123,24 @@ ${header(pg, t)}
 ${lower('শুভেচ্ছা', `${pg.name} পরিবারের পক্ষ থেকে`, '')}
 <div class="ticker" style="bottom:0">${tickerText(pg, t)}</div>` });
 }
+
+// ---------- শুভ রাত্রি ----------
+export function goodNight({ page: pg, t, message, sample }) {
+  let seed = 7; for (const c of t.iso + pg.id) seed = (Math.imul(seed, 31) + c.codePointAt(0)) | 0;
+  const rnd = () => { seed = (Math.imul(seed, 1103515245) + 12345) | 0; return ((seed >>> 8) % 10000) / 10000; };
+  const stars = Array.from({ length: 70 }, () => `<circle cx="${(rnd() * 1080).toFixed(0)}" cy="${(rnd() * 700).toFixed(0)}" r="${(0.8 + rnd() * 2.2).toFixed(1)}" fill="#fff" opacity="${(0.3 + rnd() * 0.7).toFixed(2)}"/>`).join('');
+  return page({ pageCfg: pg, t, w: 1080, h: 1350, sample, css: `
+.hd{position:absolute;top:44px;left:48px;right:48px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+.hd-r{text-align:right;color:#fff}.hd-r .d1{font:600 30px/1.2 'Hind'}.hd-r .d2{font:500 24px/1.3 'Hind';opacity:.75}
+.bg{position:absolute;inset:0;background:radial-gradient(60% 40% at 72% 22%,rgba(147,197,253,.22),transparent 60%),linear-gradient(180deg,#020617 0%,#0B1437 55%,#1E1B4B 100%)}
+.moon{position:absolute;top:150px;right:150px}
+.gn{position:absolute;top:560px;left:0;right:0;text-align:center;font:800 160px/1 'Baloo';color:#fff;text-shadow:0 0 50px rgba(147,197,253,.45)}
+.msg{position:absolute;top:800px;left:80px;right:80px;height:300px;display:flex;align-items:center;justify-content:center;text-align:center;font:400 52px/1.5 'Tiro';color:#E0E7FF;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:28px;padding:0 40px}`,
+  body: `<div class="bg"></div><svg style="position:absolute;inset:0" width="1080" height="1350">${stars}</svg>
+<div class="hd">${brand(pg)}<div class="hd-r"><div class="d1">${bnDate(t)}</div><div class="d2">${banglaDateText(t)}</div></div></div>
+<svg class="moon" width="300" height="300" viewBox="0 0 100 100"><defs><radialGradient id="mg"><stop offset="0" stop-color="#FEF9C3"/><stop offset="1" stop-color="#FDE68A"/></radialGradient></defs><path d="M62 10a42 42 0 1 0 28 70A36 36 0 1 1 62 10z" fill="url(#mg)"/></svg>
+<div class="gn">শুভ রাত্রি</div>
+<div class="msg fit" data-min="34"><div>${safe(message)}</div></div>
+<div class="lower" style="bottom:46px"><div class="tag">শুভ রাত্রি</div><div class="bar"><span>${esc(pg.name)} পরিবারের পক্ষ থেকে</span></div></div>
+<div class="ticker" style="bottom:0">${tickerText(pg, t)}</div>` });
+}

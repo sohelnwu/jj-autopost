@@ -51,3 +51,15 @@ export async function postReel({ pageId, token, videoPath, caption, graphVersion
     return { id: j.id, as: 'video' };
   }
 }
+
+// পোস্টের নিচে পেজের পক্ষ থেকে প্রথম কমেন্ট (pages_manage_engagement পারমিশন লাগে)।
+// ফেসবুক API দিয়ে কমেন্ট পিন করার কোনো ব্যবস্থা ডকুমেন্টেশনে নেই, তাই শুধু কমেন্ট দেওয়া হয়।
+export async function firstComment({ objectId, token, message, graphVersion = 'v23.0' }) {
+  try {
+    const body = new URLSearchParams({ message, access_token: token });
+    const r = await fetch(`https://graph.facebook.com/${graphVersion}/${objectId}/comments`, { method: 'POST', body });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) return { ok: false, error: j.error?.message || `HTTP ${r.status}` };
+    return { ok: true, id: j.id };
+  } catch (e) { return { ok: false, error: e.message }; }
+}

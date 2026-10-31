@@ -17,6 +17,9 @@ import { resolveTokens, hasAnyToken } from './tokens.js';
 import * as R from './reels.js';
 import { REEL_SIZE } from './reel-slides.js';
 import { tts, buildReel } from './video.js';
+import { pickBreaking } from './breaking.js';
+import { firstComment } from './facebook.js';
+import { ask, followLine } from './viral.js';
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
@@ -49,7 +52,12 @@ let jobs;
 if (flag('due')) jobs = computeDue(cfg, state, t, new Set(Object.keys(creds)));
 else {
   const pages = cfg.pages.filter((p) => (opt('page') && opt('page') !== 'all') ? p.id === opt('page') : p.enabled !== false);
-  jobs = pages.flatMap((page) => (page.posts || []).filter((p) => !opt('type') || p.type === opt('type')).map((post) => ({ page, post })));
+  if (opt('type') === 'breaking-auto') {
+    const hhmm = `${String(t.h).padStart(2, '0')}:${String(t.min).padStart(2, '0')}`;
+    jobs = pages.filter((p) => p.breaking?.enabled).map((page) => ({ page, post: { type: 'breaking-auto', time: hhmm, n: 1 } }));
+  } else {
+    jobs = pages.flatMap((page) => (page.posts || []).filter((p) => !opt('type') || p.type === opt('type')).map((post) => ({ page, post })));
+  }
 }
 if (!jobs.length) { console.log('করার মতো কিছু নেই।'); process.exit(0); }
 
@@ -128,6 +136,23 @@ async function build({ page, post }) {
       const lines = Array.from({ length: Math.min(post.count || 3, fresh.length) }, (_, i) => fresh[(start + i) % fresh.length]);
       return { reel: R.reelLines(base, { kind: post.lines, lines }), usedLines: { key: usedKey, lines, reset: used.size === 0 } };
     }
+    case 'good-night': {
+      const message = pick(C.NIGHT_MESSAGES, `${t.iso}|${page.id}|night`);
+      return { html: T.goodNight({ ...base, message }), caption: C.captionGoodNight(page, t, message) };
+    }
+    case 'breaking-auto': {
+      const b = page.breaking || {};
+      const feeds = (b.feeds || ['top']).map((k) => ({ url: feedUrl(k), label: cfg.news[k]?.label || 'খবর', topic: topicOf(k) }));
+      const used = new Set(state.headlines[page.id] || []);
+      const item = sample ? { ...SAMPLE.headlines[0], label: 'আজকের সেরা খবর', topic: 'news' } : await pickBreaking(feeds, used, { minScore: b.minScore ?? 30 });
+      if (!item) return { skip: 'এখন নতুন বড় কোনো খবর পাওয়া যায়নি' };
+      console.log(`📰 ব্রেকিং বাছাই: ${item.title} — ${item.source} (স্কোর ${Math.round(item.score || 0)})`);
+      if (process.env.GITHUB_ACTIONS) console.log(`::notice title=ব্রেকিং বাছাই::${item.title} — ${item.source} (স্কোর ${Math.round(item.score || 0)})`);
+      const asReel = b.reelEvery && post.n % b.reelEvery === 0;
+      const label = item.topic === 'sports' ? 'খেলার খবর' : item.label;
+      if (asReel) return { reel: R.reelBreaking(base, { item, topic: item.topic }), headlineKey: item.key, breaking: true };
+      return { html: T.singleNews({ ...base, label, item, breaking: true }), caption: C.captionSingle(page, t, 'ব্রেকিং', item, item.topic), headlineKey: item.key, breaking: true };
+    }
     default: throw new Error(`অজানা পোস্টের ধরন: ${post.type}`);
   }
 }
@@ -159,6 +184,7 @@ for (const job of jobs) {
   const name = `${page.id}-${post.time.replace(':', '')}-${post.type}${(post.news || post.lines) ? '-' + (post.news || post.lines) : ''}`;
   try {
     const card = await build(job);
+    if (card.skip) { console.log(`ℹ️ ${page.name}: ${card.skip}`); continue; }
     let media;
     if (card.reel) {
       media = await makeReel(page, card.reel, name);
@@ -173,22 +199,43 @@ for (const job of jobs) {
     const cred = credFor(page);
     if (!cred?.id || !cred?.token) { console.log(`   ⚠️ ${page.name}: টোকেন/পেজ আইডি নেই, তাই পোস্ট হয়নি`); continue; }
 
+    let postedId;
     if (card.reel) {
       const res = await postReel({ pageId: cred.id, token: cred.token, videoPath: media, caption: card.caption, graphVersion: cfg.graphVersion });
+      postedId = res.id;
       console.log(`   ✅ ${res.as === 'reel' ? 'রিল' : 'ভিডিও'} পোস্ট হয়েছে: ${page.name} (id ${res.id})`);
       if (process.env.GITHUB_ACTIONS) console.log(`::notice title=${res.as === 'reel' ? 'রিল' : 'ভিডিও'} পোস্ট হয়েছে::${page.name} — ${name} (id ${res.id})`);
     } else {
       const res = await postPhoto({ pageId: cred.id, token: cred.token, imagePath: media, caption: card.caption, graphVersion: cfg.graphVersion });
+      postedId = res.post_id || res.id;
       console.log(`   ✅ পোস্ট হয়েছে: ${page.name} (post id ${res.post_id || res.id})`);
       if (process.env.GITHUB_ACTIONS) console.log(`::notice title=পোস্ট হয়েছে::${page.name} — ${name} (id ${res.post_id || res.id})`);
     }
-    (state.days[t.iso] ||= []).push(postKey(page, post));
+    if (card.breaking && post.type === 'breaking-auto') {
+      const st = state.breaking[page.id];
+      const today = st?.date === t.iso;
+      state.breaking[page.id] = { date: t.iso, count: (today ? st.count : 0) + 1, last: t.h * 60 + t.min };
+    } else {
+      (state.days[t.iso] ||= []).push(postKey(page, post));
+    }
     if (card.headlineKey) (state.headlines[page.id] ||= []).push(card.headlineKey);
     if (card.usedLines) {
       const u = card.usedLines;
       state.headlines[u.key] = [...(u.reset ? [] : (state.headlines[u.key] || [])), ...u.lines];
     }
     saveState(state);
+
+    // প্রথম কমেন্ট (পেজের পক্ষ থেকে) — ব্যর্থ হলেও পোস্ট ঠিক থাকে
+    if (postedId && page.firstComment !== false && cfg.firstComment !== false) {
+      const kind = /ব্রেকিং|news|single|breaking/.test(post.type) ? 'news' : post.type.includes('lines') ? 'lines' : post.type.includes('weather') ? 'weather' : post.type.includes('prayer') ? 'prayer' : post.type.includes('night') ? 'night' : 'morning';
+      const msg = `${ask(kind, `${t.iso}|${name}|c`)}\n${followLine(page)}`;
+      const c = await firstComment({ objectId: postedId, token: cred.token, message: msg, graphVersion: cfg.graphVersion });
+      if (c.ok) console.log('   💬 প্রথম কমেন্ট দেওয়া হয়েছে');
+      else {
+        console.log(`   ℹ️ কমেন্ট দেওয়া যায়নি: ${c.error}`);
+        if (process.env.GITHUB_ACTIONS && !globalThis.__cWarn) { globalThis.__cWarn = 1; console.log(`::warning title=কমেন্ট দেওয়া যায়নি::${c.error}`); }
+      }
+    }
   } catch (e) {
     failed++;
     console.error(`❌ ${name}: ${e.message}`);
