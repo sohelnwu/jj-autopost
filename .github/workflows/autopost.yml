@@ -1,15 +1,20 @@
 # JJ Network অটো পোস্ট
-# প্রতি ৩০ মিনিটে চলে (ঘণ্টার ১৭ ও ৪৭ মিনিটে) — নির্ধারিত পোস্ট আর ব্রেকিং নিউজ দেখার জন্য।
-# config/pages.json-এ যে পোস্টের সময় হয়েছে শুধু সেগুলো বানিয়ে ফেসবুকে পোস্ট করে।
-# GitHub-এর শিডিউল কখনো কখনো কয়েক মিনিট থেকে বেশি দেরিতে চলতে পারে।
+# "কর্মী" রান: একটানা ~৫ ঘণ্টা ৪০ মিনিট চলে, প্রতি ৫ মিনিটে দেখে কোন পোস্টের সময় হয়েছে,
+# শেষে নিজেই পরের রান চালু করে — এভাবে ২৪ ঘণ্টা চলে।
+# GitHub-এর ঘণ্টাভিত্তিক শিডিউল শুধু ব্যাকআপ: কর্মী কোনো কারণে থেমে গেলে আবার চালু করে।
 
 name: JJ AutoPost
 
 on:
   schedule:
-    - cron: '17,47 * * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'worker = সারাক্ষণ চলা কর্মী (সাধারণত নিজে থেকেই চলে) — হাতে পরীক্ষার জন্য খালি রাখুন'
+        type: choice
+        default: ''
+        options: ['', 'worker']
       page:
         description: 'কোন পেজ? (config-এর id, যেমন jj-news — সব পেজের জন্য all)'
         default: 'all'
@@ -26,15 +31,17 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
-  group: jj-autopost
+  # কর্মী একসাথে একটাই চলে; হাতে চালানো পরীক্ষা আলাদা চলে
+  group: ${{ (github.event_name == 'schedule' || inputs.mode == 'worker') && 'jj-worker' || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 355
     env:
       FB_PAGE_TOKENS: ${{ secrets.FB_PAGE_TOKENS }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -42,6 +49,8 @@ jobs:
       GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
       GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
       GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      IS_WORKER: ${{ (github.event_name == 'schedule' || inputs.mode == 'worker') && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,13 +58,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: সময় হয়েছে কিনা দেখা
-        id: due
-        if: github.event_name == 'schedule'
-        run: node src/due.js
-
       - name: প্যাকেজ ও ব্রাউজার ইনস্টল
-        if: github.event_name == 'workflow_dispatch' || steps.due.outputs.has_due == 'true'
         run: |
           npm ci
           if [ "${{ inputs.type }}" = "check-tokens" ]; then exit 0; fi
@@ -63,13 +66,15 @@ jobs:
           which ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
           pip install --quiet --user --break-system-packages edge-tts || pipx install edge-tts || echo "edge-tts ইনস্টল হয়নি — রিল ভয়েস ছাড়া হবে"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          git config user.name "jj-autopost-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: কার্ড বানানো ও পোস্ট (শিডিউল)
-        if: github.event_name == 'schedule' && steps.due.outputs.has_due == 'true'
-        run: node src/run.js --due
+      - name: সারাক্ষণ চলা কর্মী (প্রতি ৫ মিনিটে পোস্টের সময় দেখে)
+        if: env.IS_WORKER == 'true'
+        run: node src/worker.js
 
       - name: কার্ড বানানো (হাতে চালানো)
-        if: github.event_name == 'workflow_dispatch'
+        if: env.IS_WORKER != 'true'
         env:
           DRY_RUN: ${{ inputs.dry_run }}
           PAGE: ${{ inputs.page }}
@@ -78,7 +83,7 @@ jobs:
           if [ -n "$TYPE" ]; then node src/run.js --page "$PAGE" --type "$TYPE"; else node src/run.js --page "$PAGE"; fi
 
       - name: বানানো কার্ডগুলো সংরক্ষণ (Artifacts থেকে ডাউনলোড করা যাবে)
-        if: always() && (hashFiles('out/*/*.png') != '' || hashFiles('out/*/*.mp4') != '')
+        if: always() && env.IS_WORKER != 'true' && (hashFiles('out/*/*.png') != '' || hashFiles('out/*/*.mp4') != '')
         uses: actions/upload-artifact@v4
         with:
           name: cards-${{ github.run_id }}
@@ -91,8 +96,6 @@ jobs:
         if: always()
         run: |
           if [ -n "$(git status --porcelain state)" ]; then
-            git config user.name "jj-autopost-bot"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add state
             git commit -m "পোস্টের হিসাব আপডেট [skip ci]"
             git pull --rebase --autostash || true
