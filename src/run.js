@@ -37,6 +37,8 @@ const dry = flag('dry') || process.env.DRY_RUN === 'true';
 let creds = {};
 if (hasAnyToken() && !sample) {
   try { creds = await resolveTokens(cfg); } catch (e) { console.error(`⚠️ ${e.message}`); }
+  const { tokenErrors } = await import('./tokens.js');
+  for (const te of tokenErrors) if (process.env.GITHUB_ACTIONS) console.log(`::error title=ফেসবুক টোকেন বাতিল::${te.replace(/\s+/g, ' ').slice(0, 300)}`);
   for (const p of cfg.pages) {
     const c = creds[p.id];
     console.log(c ? `🔑 ${p.name} → ফেসবুক পেজ "${c.fbName}" (id ${c.id})` : `🔑 ${p.name} → টোকেন নেই`);

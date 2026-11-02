@@ -29,6 +29,8 @@ async function whoIs(token, graphVersion) {
   return { id: j.id, name: j.name };
 }
 
+export const tokenErrors = [];
+
 // ফেরত দেয়: { [config page id]: { id, token, fbName } }
 export async function resolveTokens(cfg, raw = process.env.FB_PAGE_TOKENS, { log = console.log } = {}) {
   const { byId, list } = parseSecret(raw);
@@ -41,8 +43,9 @@ export async function resolveTokens(cfg, raw = process.env.FB_PAGE_TOKENS, { log
 
   // যেসব টোকেনে নাম/আইডি নেই, ফেসবুককে জিজ্ঞেস করে জেনে নেওয়া
   for (const item of list) {
-    if (item.id && item.name) continue;
+    // নাম-আইডি জানা থাকলেও টোকেন সত্যিই কাজ করছে কিনা যাচাই (অনুমতি হারালে এখানেই ধরা পড়ে)
     const who = await whoIs(item.token, cfg.graphVersion || 'v23.0');
+    if (who.error && item.name) { log(`⚠️ "${item.name}" পেজের টোকেন কাজ করছে না: ${who.error}`); tokenErrors.push(`${item.name}: ${who.error}`); item.bad = true; continue; }
     if (who.error) { log(`⚠️ একটা টোকেন কাজ করছে না: ${who.error}`); item.bad = true; continue; }
     Object.assign(item, who);
   }
