@@ -48,6 +48,18 @@ const feedUrl = (q) => (q === '@top'
   ? 'https://news.google.com/rss?hl=bn&gl=BD&ceid=BD:bn'
   : `https://news.google.com/rss/search?q=${encodeURIComponent(`${q} when:1d`)}&hl=bn&gl=BD&ceid=BD:bn`);
 
+// শিরোনাম দুটো একই ঘটনার কিনা — বিশেষ শব্দের মিল দেখে (সাধারণ শব্দ বাদ)
+const COMMON = new Set(['বাংলাদেশ', 'বাংলাদেশের', 'ক্রিকেট', 'ফুটবল', 'খেলা', 'দলের', 'সরকার', 'সরকারের', 'নিয়ে', 'থেকে', 'জন্য', 'বিরুদ্ধে', 'হবে', 'হলো', 'করে', 'করল', 'বললেন', 'দিলেন', 'আজ', 'আজকের', 'নতুন', 'পর', 'আগে', 'এবার', 'কেন', 'কী', 'যা', 'টেস্ট', 'ম্যাচ', 'ম্যাচে']);
+const words = (t) => [...new Set(String(t).toLowerCase().replace(/[^\u0980-\u09FFa-z0-9\s]/g, ' ').split(/\s+/)
+  .filter((w) => w.length >= 3 && !COMMON.has(w)))];
+// একই শব্দের রূপ (হাসান/হাসানের, রেকর্ড/রেকর্ডের): ছোটটার প্রায় পুরোটা বড়টার শুরুতে আছে
+const wordMatch = (x, y) => { const [a, b] = x.length <= y.length ? [x, y] : [y, x]; const k = Math.max(3, a.length - 2); return b.startsWith(a.slice(0, k)) && a.length >= 3; };
+export function sameStory(a, b) {
+  const A = words(a), B = words(b); if (!A.length || !B.length) return false;
+  const hit = A.filter((w) => B.some((v) => wordMatch(w, v))).length;
+  return hit >= 3 || hit / Math.min(A.length, B.length) >= 0.5;
+}
+
 export async function findViral({ topic, query, count }) {
   const T = topic === 'custom' ? { label: query || 'খবর', topic: 'news', feeds: [query] } : (TOPICS[topic] || TOPICS.random);
   const lists = await Promise.all(T.feeds.filter(Boolean).map((q) => fetchFeed(feedUrl(q))));
@@ -60,7 +72,14 @@ export async function findViral({ topic, query, count }) {
     if (score > 0) all.push({ ...it, key, score, label: T.label, topic: T.topic });
   }
   all.sort((a, b) => b.score - a.score);
-  return { label: T.label, topic: T.topic, items: all.slice(0, count) };
+  // একই ঘটনার একাধিক সংবাদমাধ্যমের শিরোনাম — শুধু সবচেয়ে ভালোটা রাখা
+  const picked = [];
+  for (const it of all) {
+    if (picked.length >= count) break;
+    if (picked.some((p) => sameStory(p.title, it.title))) continue;
+    picked.push(it);
+  }
+  return { label: T.label, topic: T.topic, items: picked };
 }
 
 export async function main() {

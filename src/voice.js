@@ -157,11 +157,11 @@ export async function geminiText(prompt, { search = true, deadline = Date.now() 
   if (!KEYS.length) return null;
   for (const model of await textModels()) {
     if (badModels.has(model)) continue;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 3 + KEYS.length; attempt++) {
       const left = deadline - Date.now(); if (left < 5000) return null;
-      const key = KEYS.find((k) => !deadText.has(`${search}|${k}`)); if (!key) return null;
+      const key = KEYS.find((k) => !deadText.has(`${search}|${model}|${k}`)); if (!key) break; // এই মডেলে সব কী শেষ — পরের মডেল
       try {
-        const t0 = Date.now(); const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), Math.min(60000, left));
+        const t0 = Date.now(); const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), Math.min(40000, left));
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
           method: 'POST', signal: ac.signal,
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
@@ -177,9 +177,9 @@ export async function geminiText(prompt, { search = true, deadline = Date.now() 
         if (r.status === 429) {
           // মিনিটের সীমা হলে একটু থেমে আবার; দিনের সীমা হলে এই কী বাদ
           if (/per.?minute|PerMinute/i.test(JSON.stringify(j)) && attempt < 2) { console.log('   ⏳ মিনিটের সীমা — ২০ সেকেন্ড অপেক্ষা'); await new Promise((ok) => setTimeout(ok, 20000)); continue; }
-          console.log(`   ⚠️ ${model}: সীমা পূর্ণ (${msg})`); deadText.add(`${search}|${key}`); continue;
+          console.log(`   ⚠️ ${model}: সীমা পূর্ণ (${msg})`); deadText.add(`${search}|${model}|${key}`); continue;
         }
-        if (r.status === 403) { console.log(`   ⚠️ ${model}: অনুমতি নেই (${msg})`); deadText.add(`${search}|${key}`); continue; }
+        if (r.status === 403) { console.log(`   ⚠️ ${model}: অনুমতি নেই (${msg})`); deadText.add(`${search}|${model}|${key}`); continue; }
         if (r.status >= 500) { await new Promise((ok) => setTimeout(ok, 2000)); if (attempt >= 1) break; continue; } // সার্ভার ব্যস্ত — দ্রুত পরের মডেলে
         if (r.status === 400 && /think/i.test(msg) && !noThink.has(model)) { noThink.add(model); attempt--; continue; }
         if (!r.ok) { console.log(`   ⚠️ ${model}: ${msg}`); badModels.add(model); break; }

@@ -66,7 +66,7 @@ async function readOne(link) {
 export async function fetchArticle(item) {
   const why = [];
   const { relevant } = await import('./detail.js');
-  for (const link of [item.link, ...(item.alts || [])].filter(Boolean).slice(0, 4)) {
+  for (const link of [item.link, ...(item.alts || [])].filter(Boolean).slice(0, 6)) {
     const r = await readOne(link);
     if (r.text && relevant(item.title, r.text)) return r;
     why.push(r.text ? `${r.host}: অন্য খবর` : r.why);
