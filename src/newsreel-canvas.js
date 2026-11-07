@@ -97,8 +97,12 @@
   // শিরোনাম: শব্দে শব্দে ভেসে ওঠে (ভয়েসের সাথে মিলিয়ে)
   function headline(seg, segT, absT, y0, boxH) {
     const L = seg._L; const lh = 1.3; ctx.font = F(700, L.s);
-    const total = seg._words; const shown = seg.revealStart != null
-      ? total * clamp((absT - seg.revealStart) / Math.max(0.3, seg.revealEnd - seg.revealStart)) : total;
+    const total = seg._words; let shown = total;
+    if (seg.curve) {
+      // কণ্ঠ যতটুকু বলেছে ঠিক ততটুকু (আগে-পরে নয়)
+      const p = seg.curve[Math.max(0, Math.min(seg.curve.length - 1, Math.round(absT * S.fps) - seg.curveF0))];
+      shown = Math.round(total * clamp((p - (seg.share || 0)) / Math.max(0.05, 1 - (seg.share || 0))) * 100) / 100;
+    } else if (seg.revealStart != null) shown = total * clamp((absT - seg.revealStart) / Math.max(0.3, seg.revealEnd - seg.revealStart));
     let wi = 0; const hiUntil = seg._hiWords;
     const startY = y0 + Math.max(0, (boxH - L.lines.length * L.s * lh) / 2);
     L.lines.forEach((ln, i) => {

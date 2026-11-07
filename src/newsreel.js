@@ -77,43 +77,93 @@ export async function buildNewsReel(opts) {
   const auds = await speakSegments(segs.map((s) => s.say), `${dir}/v`, { style: 'news', ...opts.voice });
   segs.forEach((s, i) => { s.audio = auds[i]; s.adur = s.audio ? duration(s.audio) : 0; });
   // ---------- সময়রেখা ----------
-  let cur = 0.3;
-  for (const s of segs) {
-    const speakDur = s.adur || (s.say.length / 14); // ভয়েস না থাকলে পড়ার আনুমানিক সময়
-    s.start = cur; s.voiceAt = cur + 0.15;
-    s.dur = Math.max(s.min, speakDur + 0.15 + GAP);
-    if (s.kind === 'item' || s.kind === 'detail') {
-      const share = s.linkLen ? s.linkLen / s.say.length : 0;
-      s.revealStart = s.voiceAt + speakDur * share;
-      s.revealEnd = s.voiceAt + speakDur * (s.kind === 'detail' ? 0.95 : 0.9);
+  const full = auds.full; // Gemini: পুরো একটানা কণ্ঠ — কাটা-জোড়া ছাড়া, সংবাদপাঠকের মতো
+  let narrAt = 0;         // একটানা কণ্ঠ কখন শুরু
+  if (full) {
+    const first = full.idx[0];
+    narrAt = first === 0 ? 0.3 : segs.slice(0, first).reduce((t, s) => t + s.min, 0);
+    let cur = 0;
+    segs.forEach((s, i) => {
+      const k = full.idx.indexOf(i);
+      if (k >= 0) { s.start = narrAt + full.pts[k]; s.dur = full.pts[k + 1] - full.pts[k]; }
+      else if (i < first) { s.start = cur; s.dur = s.min; }
+      else { const last = segs[i - 1]; s.start = last.start + last.dur + 0.15; s.dur = s.min; }
+      cur = s.start + s.dur;
+    });
+    if (first === 0) { segs[0].dur += segs[0].start; segs[0].start = 0; }
+  } else {
+    let cur = 0.3;
+    for (const s of segs) {
+      const speakDur = s.adur || (s.say.length / 14); // ভয়েস না থাকলে পড়ার আনুমানিক সময়
+      s.start = cur; s.voiceAt = cur + 0.15;
+      s.dur = Math.max(s.min, speakDur + 0.15 + GAP);
+      cur += s.dur;
     }
-    cur += s.dur;
+    segs[0].start = 0; segs[0].dur += 0.3;
   }
-  segs[0].start = 0; segs[0].dur += 0.3;
-  const total = cur + 0.2;
+  const lastSeg = segs[segs.length - 1];
+  const total = lastSeg.start + lastSeg.dur + 0.2;
   const frames = Math.ceil(total * FPS);
 
-  // ---------- অডিও (ভয়েস + নিচু মিউজিক) ----------
-  const voiced = segs.filter((s) => s.audio);
+  // ---------- অডিও ----------
+  // ১) শুধু কণ্ঠের ট্র্যাক (লেখা মেলানোর জন্য এটা থেকেই মাপা হয়)
+  const voiceOnly = `${dir}/voice.wav`;
+  const voiced = full ? [] : segs.filter((s) => s.audio);
+  const hasVoice = !!full || voiced.length > 0;
+  if (hasVoice) {
+    const a = ['-y', '-loglevel', 'error']; const f = [];
+    if (full) {
+      const ms = Math.round(narrAt * 1000);
+      a.push('-i', full.wav);
+      f.push(`[0:a]aresample=44100,aformat=channel_layouts=stereo,adelay=${ms}|${ms},apad[v]`);
+    } else {
+      voiced.forEach((s) => a.push('-i', s.audio));
+      // প্রতিটা অংশের শুরু-শেষে খুব নরম ফেড — হঠাৎ কাটার "টক" শব্দ যেন না হয়
+      voiced.forEach((s, k) => { const ms = Math.round(s.voiceAt * 1000); f.push(`[${k}:a]aresample=44100,aformat=channel_layouts=stereo,afade=t=in:d=0.03,areverse,afade=t=in:d=0.06,areverse,adelay=${ms}|${ms}[a${k}]`); });
+      f.push(`${voiced.map((_, k) => `[a${k}]`).join('')}amix=inputs=${voiced.length}:duration=longest:normalize=0,apad[v]`);
+    }
+    a.push('-filter_complex', f.join(';'), '-map', '[v]', '-t', total.toFixed(2), '-ar', '44100', voiceOnly);
+    const r = spawnSync('ffmpeg', a, { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`কণ্ঠ জোড়া ব্যর্থ: ${(r.stderr || '').split('\n').slice(-3).join(' ')}`);
+  }
+  // ২) নিচু, টানা ব্যাকগ্রাউন্ড সুর (তাল/টিক-টিক শব্দ ছাড়া) + কণ্ঠ
   const narr = `${dir}/narration.wav`;
-  const music = ['-f', 'lavfi', '-i', `aevalsrc=0.05*(0.6-0.4*cos(2*PI*mod(t\\,0.5)/0.5))*(sin(2*PI*110*t)+0.5*sin(2*PI*164.8*t)+0.35*sin(2*PI*220*t))*exp(-3*mod(t\\,0.5)):s=44100:d=${Math.ceil(total + 1)}`];
   {
+    const pad = `aevalsrc=0.022*(sin(2*PI*110*t)+0.6*sin(2*PI*164.81*t)+0.45*sin(2*PI*220*t)+0.25*sin(2*PI*277.18*t))*(0.85+0.15*sin(2*PI*0.08*t)):s=44100:d=${Math.ceil(total + 1)}`;
     const a = ['-y', '-loglevel', 'error'];
-    voiced.forEach((s) => a.push('-i', s.audio));
-    a.push(...music);
-    const f = [];
-    voiced.forEach((s, k) => { const ms = Math.round(s.voiceAt * 1000); f.push(`[${k}:a]aresample=44100,aformat=channel_layouts=stereo,adelay=${ms}|${ms}[a${k}]`); });
-    const mi = voiced.length;
-    f.push(`[${mi}:a]atrim=0:${total.toFixed(2)},volume=${voiced.length ? 0.35 : 0.9},lowpass=f=1800,afade=t=in:d=1,afade=t=out:st=${Math.max(0, total - 1.2).toFixed(2)}:d=1.2,aformat=channel_layouts=stereo[m]`);
-    if (voiced.length) {
-      f.push(`${voiced.map((_, k) => `[a${k}]`).join('')}amix=inputs=${voiced.length}:duration=longest:normalize=0,volume=1.5,acompressor=threshold=-18dB:ratio=3:attack=5:release=80[v]`);
+    if (hasVoice) a.push('-i', voiceOnly);
+    a.push('-f', 'lavfi', '-i', pad);
+    const mi = hasVoice ? 1 : 0; const f = [];
+    f.push(`[${mi}:a]atrim=0:${total.toFixed(2)},volume=${hasVoice ? 0.5 : 1.2},lowpass=f=1400,afade=t=in:d=1.2,afade=t=out:st=${Math.max(0, total - 1.2).toFixed(2)}:d=1.2,aformat=channel_layouts=stereo[m]`);
+    if (hasVoice) {
+      f.push('[0:a]volume=1.4,acompressor=threshold=-20dB:ratio=2.5:attack=10:release=150[v]');
       f.push('[v][m]amix=inputs=2:duration=first:normalize=0[o]');
     } else f.push('[m]anull[o]');
     a.push('-filter_complex', f.join(';'), '-map', '[o]', '-t', total.toFixed(2), '-ar', '44100', narr);
     const r = spawnSync('ffmpeg', a, { encoding: 'utf8' });
     if (r.status !== 0) throw new Error(`অডিও জোড়া ব্যর্থ: ${(r.stderr || '').split('\n').slice(-3).join(' ')}`);
   }
-  const env = envelope(narr, frames);
+  // ৩) লেখা ওঠা কণ্ঠের সাথে হুবহু: কণ্ঠ যতটুকু আসলে বলা হয়েছে (আওয়াজ থাকা সময়) ততটুকু শব্দ দেখা যায়
+  const venv = hasVoice ? envelope(voiceOnly, frames) : [];
+  for (const s of segs) {
+    if (s.kind !== 'item' && s.kind !== 'detail') continue;
+    const f0 = Math.floor(s.start * FPS), f1 = Math.min(frames, Math.ceil((s.start + s.dur) * FPS));
+    const act = []; let sum = 0;
+    for (let f = f0; f < f1; f++) { const on = (venv[f] || 0) > 0.08 ? 1 : 0; sum += on; act.push(sum); }
+    if (sum > FPS * 0.4) {
+      // প্রতিটা ফ্রেমে কতটা বলা হয়েছে (০–১); একটু আগে দেখানো যাতে শব্দ শোনার সাথে সাথে দেখা যায়
+      const lead = 3;
+      s.curveF0 = f0; s.curve = act.map((_, i) => Math.round((act[Math.min(act.length - 1, i + lead)] / sum) * 1000) / 1000);
+      const firstOn = act.findIndex((v) => v > 0); const lastOn = act.indexOf(sum);
+      s.revealStart = (f0 + Math.max(0, firstOn)) / FPS; s.revealEnd = (f0 + Math.max(0, lastOn)) / FPS;
+    } else {
+      const share = s.linkLen ? s.linkLen / s.say.length : 0;
+      const sd = s.adur || (s.say.length / 14); const va = s.voiceAt ?? s.start + 0.15;
+      s.revealStart = va + sd * share; s.revealEnd = va + sd * 0.95;
+    }
+    s.share = s.linkLen ? s.linkLen / s.say.length : 0;
+  }
+  const env = hasVoice ? venv : envelope(narr, frames);
 
   // ---------- ফ্রেম আঁকা ----------
   const spec = {
@@ -121,7 +171,7 @@ export async function buildNewsReel(opts) {
     brandA, brandB: rest.join(' ') || 'NEWS', pageName: page.name, date: opts.dateText, title: opts.title || 'এই মুহূর্তের খবর',
     kicker: opts.kicker || 'সংবাদ শিরোনাম', breaking: !!opts.breaking, anchor: `${page.name} সংবাদ`,
     outroTop: opts.breaking ? 'আরও আপডেট পেতে' : 'আরও খবরের জন্য', outroLine: 'ফলো করুন, শেয়ার করুন',
-    ticker: items.map((x) => noLinks(x.title)).join('   ●   '), cat: 'news', env,
+    ticker: items.map((x) => noLinks(x.title)).join('   ●   '), cat: 'news', env, fps: FPS,
     segments: segs.map(({ audio, adur, say, ...s }) => s),
   };
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS}html,body{margin:0;background:#000}</style></head>

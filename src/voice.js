@@ -100,17 +100,28 @@ export function splitBySilence(wav, lens, base) {
     const sum = lens.reduce((a, b) => a + b, 0);
     let acc = 0; const want = lens.slice(0, -1).map((l) => (acc += l) / sum * total); // প্রত্যাশিত কাটার জায়গা
     if (sil.length >= n - 1) {
-      // প্রতিটা প্রত্যাশিত জায়গার কাছের লম্বা বিরতিটা নেওয়া
-      const used = new Set();
-      cuts = want.map((w) => {
-        let best = -1, bestScore = -1e9;
-        sil.forEach((x, i) => { if (used.has(i)) return; const mid = (x.a + x.b) / 2; const sc = (x.b - x.a) * 4 - Math.abs(mid - w); if (sc > bestScore) { bestScore = sc; best = i; } });
-        used.add(best); return (sil[best].a + sil[best].b) / 2;
-      }).sort((a, b) => a - b);
+      // ক্রম ঠিক রেখে (DP) n-1টা বিরতি বাছাই: লম্বা বিরতি + প্রত্যাশিত জায়গার কাছাকাছি
+      const m = sil.length, K = n - 1;
+      const sc = (k, j) => (sil[j].b - sil[j].a) * 6 - Math.abs((sil[j].a + sil[j].b) / 2 - want[k]);
+      const best = Array.from({ length: K + 1 }, () => new Array(m + 1).fill(-1e9));
+      const from = Array.from({ length: K + 1 }, () => new Array(m + 1).fill(0));
+      for (let j = 0; j <= m; j++) best[0][j] = 0;
+      for (let k = 1; k <= K; k++) {
+        for (let j = k; j <= m; j++) {
+          // k-তম কাট j-1 নম্বর বিরতিতে, অথবা আগের কোনো বিরতিতে (j-1 পর্যন্ত)
+          const take = best[k - 1][j - 1] + sc(k - 1, j - 1);
+          const skip = best[k][j - 1];
+          if (take >= skip) { best[k][j] = take; from[k][j] = 1; } else { best[k][j] = skip; from[k][j] = 0; }
+        }
+      }
+      const pick = []; let k = K, j = m;
+      while (k > 0 && j > 0) { if (from[k][j]) { pick.unshift(j - 1); k--; } j--; }
+      cuts = pick.length === K ? pick.map((i) => (sil[i].a + sil[i].b) / 2) : want;
     } else cuts = want;
   }
   const pts = [0, ...cuts, total];
   const out = [];
+  out.pts = pts; out.wav = wav; // পুরো একটানা কণ্ঠ + কোথায় কোন অংশ শুরু
   for (let i = 0; i < n; i++) {
     const f = `${base}-p${i}.wav`;
     const c = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-af', `atrim=${pts[i].toFixed(3)}:${pts[i + 1].toFixed(3)},asetpts=PTS-STARTPTS,${TRIM}`, f]);
@@ -205,7 +216,7 @@ async function speakSegments0(texts, base, opts = {}) {
     const wav = await gemini(full, `${base}-all.wav`, { voice: opts.geminiVoice, style: opts.style, trim: false });
     if (wav) {
       const parts = splitBySilence(wav, idx.map((i) => texts[i].length), base);
-      if (parts) { idx.forEach((i, k) => { res[i] = parts[k]; }); return res; }
+      if (parts) { idx.forEach((i, k) => { res[i] = parts[k]; }); res.full = { wav: parts.wav, pts: parts.pts, idx }; return res; }
       voiceStatus.used.delete('Gemini');
     }
   }
