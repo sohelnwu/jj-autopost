@@ -157,7 +157,7 @@ export async function geminiText(prompt, { search = true } = {}) {
   for (const model of await textModels()) {
     if (badModels.has(model)) continue;
     for (let attempt = 0; attempt < 4; attempt++) {
-      const key = KEYS.find((k) => !deadText.has(k)); if (!key) return null;
+      const key = KEYS.find((k) => !deadText.has(`${search}|${k}`)); if (!key) return null;
       try {
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
           method: 'POST',
@@ -173,9 +173,9 @@ export async function geminiText(prompt, { search = true } = {}) {
         if (r.status === 429) {
           // মিনিটের সীমা হলে একটু থেমে আবার; দিনের সীমা হলে এই কী বাদ
           if (/per.?minute|retry in|RetryInfo/i.test(JSON.stringify(j)) && attempt < 2) { await new Promise((ok) => setTimeout(ok, 20000)); continue; }
-          console.log(`   ⚠️ ${model}: সীমা পূর্ণ (${msg})`); deadText.add(key); continue;
+          console.log(`   ⚠️ ${model}: সীমা পূর্ণ (${msg})`); deadText.add(`${search}|${key}`); continue;
         }
-        if (r.status === 403) { console.log(`   ⚠️ ${model}: অনুমতি নেই (${msg})`); deadText.add(key); continue; }
+        if (r.status === 403) { console.log(`   ⚠️ ${model}: অনুমতি নেই (${msg})`); deadText.add(`${search}|${key}`); continue; }
         if (r.status >= 500) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
         if (!r.ok) { console.log(`   ⚠️ ${model}: ${msg}`); badModels.add(model); break; }
         const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
