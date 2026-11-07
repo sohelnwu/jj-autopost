@@ -94,7 +94,17 @@ export async function main() {
   const t = dhakaNow();
   const base = { page, t, sample: false };
 
-  const { label, topic, items } = await findViral({ topic: job.topic || 'random', query: job.query, count });
+  const found = await findViral({ topic: job.topic || 'random', query: job.query, count: outputs.has('reel') ? count + 4 : count });
+  const { label, topic } = found;
+  let items = found.items;
+  if (outputs.has('reel')) {
+    // বিস্তারিত রিলের জন্য মূল খবরের পাতা লাগে — কয়েকটা বাড়তি খবর দেখে, যেগুলোর পাতা পড়া যায় সেগুলো আগে (ভাইরাল ক্রম ঠিক রেখে)
+    const { fetchArticle } = await import('./article.js');
+    await Promise.all(items.map(async (it) => { it.article = await fetchArticle(it).catch(() => null); }));
+    const ok = items.filter((x) => x.article), no = items.filter((x) => !x.article);
+    const keep = new Set([...ok, ...no].slice(0, count));
+    items = items.filter((x) => keep.has(x));
+  }
   console.log(`📰 "${label}" — ${items.length}টা খবর পাওয়া গেছে`);
   items.forEach((x, i) => console.log(`   ${i + 1}. ${x.title} — ${x.source} (স্কোর ${Math.round(x.score)})`));
   if (!items.length) throw new Error('এই বিষয়ে গত ২৪ ঘণ্টায় কোনো খবর পাওয়া যায়নি। অন্য শব্দ দিয়ে চেষ্টা করুন।');
@@ -118,8 +128,6 @@ export async function main() {
   if (outputs.has('reel')) {
     // ১) প্রতিটা খবরের বিস্তারিত (Google Search থেকে আসল প্রতিবেদন পড়ে)
     // সব খবরের পাতা একসাথে পড়া (সময় বাঁচে), তারপর Gemini একটা একটা করে
-    const { fetchArticle } = await import('./article.js');
-    await Promise.all(items.map(async (it) => { it.article = await fetchArticle(it).catch(() => null); }));
     const deadline = Date.now() + 240000; // বিস্তারিত লেখার জন্য সর্বোচ্চ ৪ মিনিট
     await pool(items, 3, async (it) => {
       it.detail = await newsDetail(it, { deadline }).catch(() => null);
