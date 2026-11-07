@@ -128,9 +128,34 @@ export function speakSegments(texts, base, opts = {}) {
   return run;
 }
 
+// লেখার জন্য কোন Gemini মডেল চালু আছে — Google-এর তালিকা থেকে নিজে খুঁজে নেয় (পুরোনো মডেল বন্ধ হলেও চলবে)
+let textModelList = null;
+async function textModels() {
+  if (textModelList) return textModelList;
+  const pref = [process.env.GEMINI_TEXT_MODEL, 'gemini-flash-latest'].filter(Boolean);
+  let found = [];
+  try {
+    const key = KEYS[0];
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key } });
+    const j = await r.json();
+    const ver = (n) => Number((/gemini-(\d+(?:\.\d+)?)/.exec(n) || [])[1] || 0);
+    found = (j.models || [])
+      .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m) => m.name.replace(/^models\//, ''))
+      .filter((n) => /^gemini-[\d.]+-flash/.test(n) && !/tts|image|audio|live|embed|thinking|exp/.test(n))
+      .sort((x, y) => ver(y) - ver(x) || (/lite/.test(x) - /lite/.test(y)) || (/preview/.test(x) - /preview/.test(y)));
+    console.log(`   ℹ️ লেখার মডেল: ${found.slice(0, 4).join(', ') || 'তালিকা পাওয়া যায়নি'}`);
+  } catch (e) { console.log(`   ⚠️ মডেল তালিকা পাওয়া যায়নি: ${e.message}`); }
+  textModelList = [...new Set([...pref, ...found.slice(0, 4)])];
+  return textModelList;
+}
+
 // Gemini দিয়ে লেখা তৈরি (Google Search থেকে তথ্য নিয়ে)। কী শেষ হলে পরের কী। ব্যর্থ হলে null।
-export async function geminiText(prompt, { search = true, models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'] } = {}) {
-  for (const model of models) {
+const badModels = new Set();
+export async function geminiText(prompt, { search = true } = {}) {
+  if (!KEYS.length) return null;
+  for (const model of await textModels()) {
+    if (badModels.has(model)) continue;
     for (let attempt = 0; attempt < 4; attempt++) {
       const key = KEYS.find((k) => !deadText.has(k)); if (!key) return null;
       try {
@@ -144,11 +169,18 @@ export async function geminiText(prompt, { search = true, models = ['gemini-2.5-
           }),
         });
         const j = await r.json().catch(() => ({}));
-        if (r.status === 429 || r.status === 403) { deadText.add(key); continue; }
+        const msg = (j.error?.message || String(r.status)).slice(0, 160);
+        if (r.status === 429) {
+          // মিনিটের সীমা হলে একটু থেমে আবার; দিনের সীমা হলে এই কী বাদ
+          if (/per.?minute|retry in|RetryInfo/i.test(JSON.stringify(j)) && attempt < 2) { await new Promise((ok) => setTimeout(ok, 20000)); continue; }
+          console.log(`   ⚠️ ${model}: সীমা পূর্ণ (${msg})`); deadText.add(key); continue;
+        }
+        if (r.status === 403) { console.log(`   ⚠️ ${model}: অনুমতি নেই (${msg})`); deadText.add(key); continue; }
         if (r.status >= 500) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
-        if (!r.ok) { console.log(`   ⚠️ ${model}: ${(j.error?.message || r.status).toString().slice(0, 140)}`); break; }
+        if (!r.ok) { console.log(`   ⚠️ ${model}: ${msg}`); badModels.add(model); break; }
         const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
         if (text) return text;
+        console.log(`   ⚠️ ${model}: খালি উত্তর (${j.candidates?.[0]?.finishReason || '?'})`);
         break;
       } catch (e) { console.log(`   ⚠️ ${model}: ${e.message}`); break; }
     }
