@@ -163,7 +163,7 @@ export async function geminiText(prompt, { search = true, deadline = Date.now() 
       const left = deadline - Date.now(); if (left < 5000) return null;
       const key = KEYS.find((k) => !deadText.has(`${search}|${model}|${k}`)); if (!key) break; // এই মডেলে সব কী শেষ — পরের মডেল
       try {
-        const t0 = Date.now(); const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), Math.min(40000, left));
+        const t0 = Date.now(); const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), Math.min(20000, left));
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
           method: 'POST', signal: ac.signal,
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
