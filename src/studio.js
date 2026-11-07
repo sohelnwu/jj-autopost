@@ -128,7 +128,10 @@ export async function main() {
     // ২) রিল — তিনটা একসাথে রেন্ডার
     await pool(items, 3, async (it, i) => {
       const n = String(i + 1).padStart(2, '0');
-      const r = await buildNewsReel({ page, t, dateText: bnDate(t), breaking: true, items: [{ ...it, label: 'ব্রেকিং', topic }], outDir: 'out/studio', name: `reel-${n}`, getBrowser, seed: `${t.iso}|${job.id}|${n}`, voice });
+      // ইংরেজি-মেশানো শিরোনাম হলে Gemini-র বাংলা শিরোনাম দেখানো ও পড়া
+      const latin = (it.title.match(/[A-Za-z]/g) || []).length / it.title.length;
+      const shown = latin > 0.25 && it.detail?.headline && !it.detail.extractive ? it.detail.headline : it.title;
+      const r = await buildNewsReel({ page, t, dateText: bnDate(t), breaking: true, items: [{ ...it, title: shown, label: 'ব্রেকিং', topic }], outDir: 'out/studio', name: `reel-${n}`, getBrowser, seed: `${t.iso}|${job.id}|${n}`, voice });
       copyFileSync(r.file, `dist/reel-${n}.mp4`);
       let caption = R.reelBreaking(base, { item: it, topic }).caption;
       if (it.detail) { const parts = caption.split('\n\n'); parts.splice(1, 0, it.detail.sentences.join(' ')); caption = parts.join('\n\n'); }

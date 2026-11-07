@@ -71,6 +71,19 @@ export async function fetchArticle(item) {
     if (r.text && relevant(item.title, r.text)) return r;
     why.push(r.text ? `${r.host}: অন্য খবর` : r.why);
   }
+  // একই খবর অন্য সংবাদমাধ্যমে খোঁজা (Google News-এ শিরোনাম দিয়ে)
+  try {
+    const { fetchFeed } = await import('./breaking.js');
+    const { sameStory } = await import('./studio.js');
+    const q = item.title.replace(/[‘’'"“”:,!?।|()-]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 7).join(' ');
+    const list = await fetchFeed(`https://news.google.com/rss/search?q=${encodeURIComponent(q + ' when:2d')}&hl=bn&gl=BD&ceid=BD:bn`);
+    const tried = new Set([item.link, ...(item.alts || [])]);
+    for (const o of list.filter((x) => !tried.has(x.link) && sameStory(x.title, item.title)).slice(0, 4)) {
+      const r = await readOne(o.link);
+      if (r.text && relevant(item.title, r.text)) return r;
+      why.push(r.text ? `${r.host}: অন্য খবর` : r.why);
+    }
+  } catch {}
   console.log(`   ⚠️ পাতা পড়া যায়নি: ${why.join(' | ') || 'লিংক নেই'}`);
   return null;
 }
