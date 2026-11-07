@@ -152,21 +152,23 @@ async function textModels() {
 
 // Gemini দিয়ে লেখা তৈরি (Google Search থেকে তথ্য নিয়ে)। কী শেষ হলে পরের কী। ব্যর্থ হলে null।
 const badModels = new Set();
-export async function geminiText(prompt, { search = true } = {}) {
+const noThink = new Set(); // যেসব মডেল "কম ভাবো" সেটিং নেয় না
+export async function geminiText(prompt, { search = true, deadline = Date.now() + 180000 } = {}) {
   if (!KEYS.length) return null;
   for (const model of await textModels()) {
     if (badModels.has(model)) continue;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const left = deadline - Date.now(); if (left < 5000) return null;
       const key = KEYS.find((k) => !deadText.has(`${search}|${k}`)); if (!key) return null;
       try {
-        const t0 = Date.now(); const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 75000);
+        const t0 = Date.now(); const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), Math.min(60000, left));
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
           method: 'POST', signal: ac.signal,
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             ...(search ? { tools: [{ google_search: {} }] } : {}),
-            generationConfig: { temperature: 0.2 },
+            generationConfig: { temperature: 0.2, ...(noThink.has(model) ? {} : /gemini-[3-9]/.test(model) || /latest/.test(model) ? { thinkingConfig: { thinkingLevel: 'low' } } : /2\.5/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}) },
           }),
         });
         const j = await r.json().catch(() => ({})); clearTimeout(tm);
@@ -178,13 +180,14 @@ export async function geminiText(prompt, { search = true } = {}) {
           console.log(`   ⚠️ ${model}: সীমা পূর্ণ (${msg})`); deadText.add(`${search}|${key}`); continue;
         }
         if (r.status === 403) { console.log(`   ⚠️ ${model}: অনুমতি নেই (${msg})`); deadText.add(`${search}|${key}`); continue; }
-        if (r.status >= 500) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
+        if (r.status >= 500) { await new Promise((ok) => setTimeout(ok, 2000)); if (attempt >= 1) break; continue; } // সার্ভার ব্যস্ত — দ্রুত পরের মডেলে
+        if (r.status === 400 && /think/i.test(msg) && !noThink.has(model)) { noThink.add(model); attempt--; continue; }
         if (!r.ok) { console.log(`   ⚠️ ${model}: ${msg}`); badModels.add(model); break; }
         const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
         if (text) return text;
         console.log(`   ⚠️ ${model}: খালি উত্তর (${j.candidates?.[0]?.finishReason || '?'})`);
         break;
-      } catch (e) { console.log(`   ⚠️ ${model}: ${e.name === 'AbortError' ? '৭৫ সেকেন্ডে উত্তর আসেনি' : e.message}`); continue; }
+      } catch (e) { console.log(`   ⚠️ ${model}: ${e.name === 'AbortError' ? 'সময়মতো উত্তর আসেনি' : e.message}`); break; }
     }
   }
   return null;

@@ -65,10 +65,11 @@ async function readOne(link) {
 // মূল সংবাদমাধ্যম, না হলে একই খবরের অন্য সংবাদমাধ্যম
 export async function fetchArticle(item) {
   const why = [];
+  const { relevant } = await import('./detail.js');
   for (const link of [item.link, ...(item.alts || [])].filter(Boolean).slice(0, 4)) {
     const r = await readOne(link);
-    if (r.text) return r;
-    why.push(r.why);
+    if (r.text && relevant(item.title, r.text)) return r;
+    why.push(r.text ? `${r.host}: অন্য খবর` : r.why);
   }
   console.log(`   ⚠️ পাতা পড়া যায়নি: ${why.join(' | ') || 'লিংক নেই'}`);
   return null;

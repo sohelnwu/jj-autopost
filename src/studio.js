@@ -101,18 +101,19 @@ export async function main() {
     // সব খবরের পাতা একসাথে পড়া (সময় বাঁচে), তারপর Gemini একটা একটা করে
     const { fetchArticle } = await import('./article.js');
     await Promise.all(items.map(async (it) => { it.article = await fetchArticle(it).catch(() => null); }));
-    for (const it of items) {
-      it.detail = await newsDetail(it).catch(() => null);
+    const deadline = Date.now() + 240000; // বিস্তারিত লেখার জন্য সর্বোচ্চ ৪ মিনিট
+    await pool(items, 3, async (it) => {
+      it.detail = await newsDetail(it, { deadline }).catch(() => null);
       console.log(it.detail ? `📝 বিস্তারিত পাওয়া গেছে (${it.detail.words} শব্দ): ${it.title.slice(0, 50)}` : `⚠️ বিস্তারিত পাওয়া যায়নি — শুধু শিরোনামের রিল: ${it.title.slice(0, 50)}`);
-    }
-    // ২) রিল — দুটো একসাথে রেন্ডার
-    await pool(items, 2, async (it, i) => {
+    });
+    // ২) রিল — তিনটা একসাথে রেন্ডার
+    await pool(items, 3, async (it, i) => {
       const n = String(i + 1).padStart(2, '0');
       const r = await buildNewsReel({ page, t, dateText: bnDate(t), breaking: true, items: [{ ...it, label: 'ব্রেকিং', topic }], outDir: 'out/studio', name: `reel-${n}`, getBrowser, seed: `${t.iso}|${job.id}|${n}`, voice });
       copyFileSync(r.file, `dist/reel-${n}.mp4`);
       let caption = R.reelBreaking(base, { item: it, topic }).caption;
       if (it.detail) { const parts = caption.split('\n\n'); parts.splice(1, 0, it.detail.sentences.join(' ')); caption = parts.join('\n\n'); }
-      order.push([i, 1, { file: `reel-${n}.mp4`, kind: 'reel', title: noLinks(it.title), caption, seconds: Math.round(r.seconds), source: it.source, ...(it.detail ? {} : { note: 'বিস্তারিত খবর পাওয়া যায়নি, তাই শুধু শিরোনাম' }) }]);
+      order.push([i, 1, { file: `reel-${n}.mp4`, kind: 'reel', title: noLinks(it.title), caption, seconds: Math.round(r.seconds), source: it.source, ...(it.detail ? (it.detail.extractive ? { note: 'বিস্তারিত অংশ সংবাদমাধ্যমের লেখা থেকে নেওয়া — প্রকাশের আগে একবার দেখে নিন' } : {}) : { note: 'বিস্তারিত খবর পাওয়া যায়নি, তাই শুধু শিরোনাম' }) }]);
       console.log(`🎬 রিল ${n} তৈরি (${r.seconds.toFixed(0)} সেকেন্ড)`);
     });
   }

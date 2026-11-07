@@ -27,7 +27,25 @@ const RULES = `নিয়ম:
 
 const WRITER = 'তুমি বাংলাদেশের একটি শীর্ষ টিভি চ্যানেলের অভিজ্ঞ সংবাদ লেখক।';
 
-export async function newsDetail(item) {
+// প্রতিবেদন আসলেই এই শিরোনামের খবর কিনা (শিরোনামের মূল শব্দগুলো লেখায় আছে কিনা)
+export function relevant(title, text) {
+  const words = [...new Set(String(title).replace(/[^\u0980-\u09FFA-Za-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length >= 3))];
+  if (!words.length) return true;
+  const head = text.slice(0, 2500);
+  const hit = words.filter((w) => head.includes(w.slice(0, Math.max(3, w.length - 2)))).length;
+  return hit / words.length >= 0.4;
+}
+
+// Gemini সময়মতো না পারলে: প্রতিবেদনের শুরুর অংশ থেকে মূল কথাগুলো (প্রায় ১১০ শব্দ)
+function leadSentences(article) {
+  const sents = article.replace(/\n+/g, ' ').split(/(?<=[।!?])\s+/).map((x) => clean(x))
+    .filter((x) => x.length > 25 && x.length < 260 && !/^[^।]{0,40}(প্রতিনিধি|ডেস্ক|অনলাইন)\s*[:,]/.test(x));
+  const out = []; let w = 0;
+  for (const x of sents) { const n = x.split(/\s+/).length; if (w + n > 125 && out.length >= 3) break; out.push(x); w += n; }
+  return w >= 50 ? { sentences: out, words: w } : null;
+}
+
+export async function newsDetail(item, { deadline } = {}) {
   const art = item.article !== undefined ? item.article : await fetchArticle(item).catch(() => null);
   const article = art?.text;
   if (article) console.log(`   📄 মূল খবর: ${art.host} (${article.length} অক্ষর)`);
@@ -41,18 +59,23 @@ ${article}
 >>>
 প্রতিবেদনটা শিরোনামের খবরের সাথে না মিললে শুধু লিখবে: NOT_FOUND
 
-${RULES}`, { search: false });
+${RULES}`, { search: false, deadline });
   }
-  if (!text) {
+  if (!text && !article) {
     text = await geminiText(`${WRITER}
 Google Search দিয়ে গত ৪৮ ঘণ্টার এই খবরটির মূল প্রতিবেদন খুঁজে বের করো:
 শিরোনাম: «${item.title}»
 প্রকাশ করেছে: ${item.source || 'অজানা'}
 খবরটা নিশ্চিতভাবে খুঁজে না পেলে বা অন্য ঘটনার সাথে মিলে গেলে শুধু লিখবে: NOT_FOUND
 
-${RULES}`, { search: true });
+${RULES}`, { search: true, deadline });
   }
-  if (!text || /NOT_FOUND/i.test(text)) return null;
+  if (/NOT_FOUND/i.test(text || '')) return null;
+  if (!text) {
+    const lead = article && leadSentences(article);
+    if (lead) console.log('   ↪ Gemini সময়মতো পারেনি — প্রতিবেদনের মূল অংশ থেকে');
+    return lead ? { headline: clean(item.title), ...lead, extractive: true } : null;
+  }
 
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   let headline = '';
