@@ -1,0 +1,72 @@
+# JJ Reel Studio — PWA অ্যাপ থেকে চালু হয়।
+# বিষয়ভিত্তিক ভাইরাল খবর খুঁজে রিল/ফটোকার্ড বানায়, তারপর GitHub Release-এ তোলে।
+# অ্যাপ সেই Release থেকে ফাইলগুলো দেখায় ও ডাউনলোড করতে দেয়। ৫ দিনের পুরোনো ফলাফল নিজে থেকে মুছে যায়।
+
+name: JJ Reel Studio
+run-name: studio ${{ inputs.job_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'কাজের আইডি (অ্যাপ নিজে দেয়)'
+        required: true
+      job:
+        description: 'কাজের বিবরণ (JSON — অ্যাপ নিজে দেয়)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: studio-${{ inputs.job_id }}
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+      GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
+      GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: প্যাকেজ ইনস্টল
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          which ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+          pip install --quiet --user --break-system-packages edge-tts || pipx install edge-tts || true
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: খবর খুঁজে রিল/কার্ড বানানো
+        env:
+          STUDIO_JOB: ${{ inputs.job }}
+        run: node src/studio.js
+
+      - name: ফলাফল অ্যাপে পাঠানো (Release)
+        if: always()
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+        run: |
+          mkdir -p dist
+          [ -f dist/manifest.json ] || echo '{"error":"কাজ মাঝপথে বন্ধ হয়েছে","files":[]}' > dist/manifest.json
+          { echo '```json'; cat dist/manifest.json; echo; echo '```'; } > body.md
+          gh release create "studio-$JOB_ID" dist/* --title "স্টুডিও $JOB_ID" --notes-file body.md --prerelease
+
+      - name: পুরোনো ফলাফল মুছে ফেলা (৫ দিনের বেশি)
+        if: always()
+        run: |
+          cutoff=$(date -u -d '5 days ago' +%s)
+          gh release list --limit 200 --json tagName,createdAt --jq '.[] | select(.tagName|startswith("studio-")) | "\(.tagName) \(.createdAt)"' |
+          while read tag created; do
+            [ "$(date -u -d "$created" +%s)" -lt "$cutoff" ] && gh release delete "$tag" --yes --cleanup-tag || true
+          done

@@ -19,7 +19,7 @@ const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const HOT_RX = HOT.map((w) => (w.length <= 4 ? new RegExp(`(^|[\\s,।:'"‘“])${esc(w)}(ে|ের|য়|ী)?(?=$|[\\s,।:!?'"’”])`) : new RegExp(esc(w))));
 const hotCount = (t) => HOT_RX.filter((rx) => rx.test(t)).length;
 
-async function fetchFeed(url) {
+export async function fetchFeed(url) {
   try {
     const r = await fetch(url, { headers: UA });
     if (!r.ok) return [];
@@ -36,16 +36,16 @@ async function fetchFeed(url) {
   } catch { return []; }
 }
 
-export function scoreItem(it, now = Date.now()) {
+export function scoreItem(it, now = Date.now(), maxAgeH = 4) {
   const title = it.title || '';
   if (!title || title.length < 18) return -1;
   if (SKIP.some((w) => title.includes(w))) return -1;
   const ageH = it.date ? (now - Date.parse(it.date)) / 3600000 : 2;
-  if (!(ageH >= -1) || ageH > 4) return -1;
+  if (!(ageH >= -1) || ageH > maxAgeH) return -1;
   let s = 0;
   s += Math.min(it.coverage || 1, 8) * 6;        // কভারেজ
   s += Math.max(0, 20 - (it.rank || 0) * 2);       // ফিডে অবস্থান
-  s += Math.max(0, 18 - ageH * 5);                 // নতুনত্ব
+  s += Math.max(0, 18 - ageH * (maxAgeH > 4 ? 1.5 : 5)); // নতুনত্ব
   s += hotCount(title) * 7;
   if ((it.coverage || 1) < 2 && hotCount(title) === 0) s -= 15; // একা একটা সূত্রের সাধারণ খবর — ব্রেকিং নয়
   if (/[?？]$/.test(title)) s -= 6;                  // প্রশ্নবোধক শিরোনাম সাধারণত মতামতধর্মী

@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A0F1F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>JJ Reel Studio</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&family=Baloo+Da+2:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#070B16;--panel:#0F172A;--panel2:#152038;--line:#1F2A44;--ink:#F1F5F9;--muted:#94A3B8;--red:#E11D2E;--hi:#FFD23F;--ok:#22C55E;--warn:#F59E0B}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 'Noto Sans Bengali',system-ui,sans-serif}
+  body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+  header{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,#0A0F1F,#0A0F1Fee);border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px}
+  .brand{display:inline-flex;border-radius:8px;overflow:hidden;font:800 20px/1 'Baloo Da 2',sans-serif}
+  .brand b{background:var(--red);color:#fff;padding:7px 8px 3px}.brand span{background:#fff;color:#0B1020;padding:7px 9px 3px}
+  header h1{font:600 17px/1.2 inherit;margin:0;flex:1}
+  .live{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#fff;background:var(--red);padding:3px 8px;border-radius:6px}
+  .live:before{content:'';width:7px;height:7px;border-radius:50%;background:#fff;animation:blink 1.2s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  main{max-width:760px;margin:0 auto;padding:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+  .card h2{font-size:17px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+  .step{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--red);font-size:13px;font-weight:700}
+  .muted{color:var(--muted);font-size:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:999px;padding:8px 14px;font:inherit;font-size:15px;cursor:pointer}
+  .chip[aria-pressed=true]{background:var(--red);border-color:var(--red);font-weight:600}
+  .chip.random{border-color:var(--hi);color:var(--hi)}.chip.random[aria-pressed=true]{background:var(--hi);color:#111}
+  input[type=text],input[type=password],select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:12px;font:inherit}
+  input:focus,select:focus{outline:2px solid var(--red);outline-offset:1px}
+  label.opt{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);margin-top:8px;cursor:pointer}
+  label.opt input{width:20px;height:20px;margin-top:3px;accent-color:var(--red)}
+  label.opt small{display:block;color:var(--muted);font-size:13px}
+  .row{display:flex;gap:10px;align-items:center}
+  .count{display:flex;align-items:center;gap:10px}
+  .count button{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font-size:22px}
+  .count output{min-width:46px;text-align:center;font:700 26px/1 'Baloo Da 2'}
+  .go{width:100%;border:0;border-radius:14px;background:linear-gradient(135deg,#E11D2E,#B3121F);color:#fff;font:700 18px/1 inherit;padding:16px;margin-top:6px;cursor:pointer;box-shadow:0 10px 30px #E11D2E40}
+  .go:disabled{opacity:.5}
+  .btn{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:10px;padding:9px 13px;font:inherit;font-size:14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+  .btn.red{background:var(--red);border-color:var(--red);color:#fff}
+  nav{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;background:#0A0F1Ff2;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav button{flex:1;background:none;border:0;color:var(--muted);font:inherit;font-size:13px;padding:10px 4px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+  nav button span{font-size:21px;line-height:1}
+  nav button[aria-current=page]{color:#fff}nav button[aria-current=page] span{filter:drop-shadow(0 0 6px #E11D2E)}
+  .badge{background:var(--red);color:#fff;border-radius:999px;font-size:11px;padding:0 6px;margin-left:2px}
+  .job{border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:12px;overflow:hidden}
+  .job-h{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
+  .job-h .t{flex:1;min-width:0}.job-h .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .st{font-size:12px;border-radius:999px;padding:3px 9px;white-space:nowrap}
+  .st.run{background:#F59E0B22;color:var(--warn)}.st.ok{background:#22C55E22;color:var(--ok)}.st.err{background:#E11D2E22;color:#F87171}
+  .bar{height:4px;background:var(--line)}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--red),var(--hi));transition:width .8s}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:12px 14px 14px}
+  .item{background:var(--panel2);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  .item video,.item img{width:100%;display:block;background:#000;aspect-ratio:9/16;object-fit:contain}
+  .item img{aspect-ratio:4/5}
+  .item .meta{padding:8px 10px;font-size:13px;flex:1}
+  .item .meta b{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-weight:600}
+  .item .acts{display:flex;gap:6px;padding:0 8px 10px;flex-wrap:wrap}
+  .item .acts .btn{flex:1;justify-content:center;padding:8px 6px;font-size:13px}
+  .news{padding:0 14px 12px;font-size:14px;color:var(--muted)}
+  .empty{text-align:center;color:var(--muted);padding:30px 10px}
+  .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#fff;color:#111;padding:10px 16px;border-radius:12px;font-size:14px;z-index:9;opacity:0;transition:.25s;pointer-events:none;max-width:90vw;text-align:center}
+  .toast.show{opacity:1}
+  .hide{display:none!important}
+  ol.steps{padding-left:20px;margin:6px 0}ol.steps li{margin:5px 0}
+  code{background:var(--panel2);padding:1px 6px;border-radius:6px;font-size:13px}
+  a{color:#93C5FD}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>JJ</b><span>STUDIO</span></div>
+  <h1>নিউজ রিল স্টুডিও</h1>
+  <span class="live">লাইভ</span>
+</header>
+
+<main>
+  <!-- ===== তৈরি ===== -->
+  <section id="v-make">
+    <div class="card" id="needToken" hidden>
+      <b>প্রথমবার:</b> <span class="muted">সেটিংসে GitHub টোকেন বসান, তারপর এখান থেকে তৈরি করতে পারবেন।</span>
+      <div style="margin-top:10px"><button class="btn red" data-go="v-set">⚙️ সেটিংসে যান</button></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">১</span> কোন বিষয়ের ভাইরাল খবর?</h2>
+      <div class="chips" id="topics"></div>
+      <div style="margin-top:12px">
+        <input type="text" id="query" placeholder="অথবা নিজে লিখুন — যেমন: সাকিব, বিশ্বকাপ, পদ্মা সেতু, স্বর্ণের দাম">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">২</span> কয়টা খবর?</h2>
+      <div class="count"><button type="button" id="cMinus">−</button><output id="cnt">৫</output><button type="button" id="cPlus">+</button>
+        <span class="muted">সবচেয়ে আলোচিত খবরগুলো বাছাই হবে</span></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">৩</span> কী কী বানাবো?</h2>
+      <label class="opt"><input type="checkbox" value="reel" checked><span>প্রতিটা খবরের <b>ব্রেকিং রিল</b><small>মেয়ের কণ্ঠে খবর পড়া, শব্দে শব্দে লেখা ওঠে · ১০–২০ সেকেন্ড</small></span></label>
+      <label class="opt"><input type="checkbox" value="card" checked><span>প্রতিটা খবরের <b>ফটোকার্ড</b><small>টিভি-নিউজ ধাঁচের ব্রেকিং কার্ড</small></span></label>
+      <label class="opt"><input type="checkbox" value="headlines-reel"><span>সব মিলিয়ে <b>সংবাদ শিরোনাম রিল</b><small>সব খবর এক রিলে, সংবাদপাঠিকার মতো · ৩০–৬০ সেকেন্ড</small></span></label>
+      <label class="opt"><input type="checkbox" value="headlines-card"><span>সব মিলিয়ে <b>সেরা খবর কার্ড</b><small>এক কার্ডে সব শিরোনাম</small></span></label>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">৪</span> কোন চ্যানেলের নামে?</h2>
+      <select id="channel"></select>
+      <div class="row" style="margin-top:10px">
+        <input type="text" id="chName" placeholder="অন্য নাম দিতে চাইলে (ঐচ্ছিক)">
+        <input type="color" id="chColor" value="#C8102E" style="width:56px;height:46px;border:0;background:none" title="রং">
+      </div>
+    </div>
+
+    <button class="go" id="goBtn">▶ তৈরি করো</button>
+    <p class="muted" style="text-align:center;margin-top:10px">তৈরি হতে সাধারণত ৩–১০ মিনিট লাগে। অ্যাপ বন্ধ করলেও কাজ চলতে থাকবে — পরে "ফলাফল" এ দেখবেন।</p>
+  </section>
+
+  <!-- ===== ফলাফল ===== -->
+  <section id="v-jobs" class="hide">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <b>সাম্প্রতিক কাজ</b><button class="btn" id="refresh">↻ রিফ্রেশ</button>
+    </div>
+    <div id="jobs"><div class="empty">এখনো কিছু তৈরি হয়নি</div></div>
+    <p class="muted">৫ দিনের পুরোনো ফলাফল নিজে থেকে মুছে যায় — দরকারি ফাইল আগেই ডাউনলোড করে রাখুন।</p>
+  </section>
+
+  <!-- ===== সেটিংস ===== -->
+  <section id="v-set" class="hide">
+    <div class="card">
+      <h2>🔑 GitHub টোকেন</h2>
+      <p class="muted">এটা দিয়ে অ্যাপ আপনার GitHub-কে কাজ শুরু করতে বলে। টোকেন শুধু এই ফোনেই থাকে।</p>
+      <input type="password" id="tok" placeholder="github_pat_..." autocomplete="off">
+      <div class="row" style="margin-top:10px"><button class="btn red" id="saveTok">সেভ ও যাচাই</button><span id="tokSt" class="muted"></span></div>
+      <details style="margin-top:12px"><summary>টোকেন কীভাবে বানাবেন?</summary>
+        <ol class="steps">
+          <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">এই পাতা খুলুন</a> (মোবাইলে Desktop site চালু করুন)</li>
+          <li>Token name: <code>JJ Studio</code>, Expiration: <b>No expiration</b> বা ১ বছর</li>
+          <li>Repository access: <b>Only select repositories</b> → <code>jj-autopost</code></li>
+          <li>Permissions → Repository permissions → <b>Actions: Read and write</b></li>
+          <li><b>Generate token</b> → কপি করে উপরে বসান</li>
+        </ol>
+      </details>
+    </div>
+    <div class="card">
+      <h2>ℹ️ কীভাবে কাজ করে</h2>
+      <p class="muted">"তৈরি করো" চাপলে আপনার GitHub (sohelnwu/jj-autopost) একটা কাজ চালু করে: বিষয় অনুযায়ী গত ২৪ ঘণ্টার সবচেয়ে আলোচিত খবর বাছাই করে, Gemini কণ্ঠে রিল আর ফটোকার্ড বানায়, তারপর এখানে পাঠায়। কোনো রিল বা কার্ডে কোনো লিংক থাকে না — শুধু সূত্রের নাম।</p>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-go="v-make" aria-current="page"><span>🎬</span>তৈরি</button>
+  <button data-go="v-jobs"><span>📂</span>ফলাফল<em id="runBadge" class="badge hide"></em></button>
+  <button data-go="v-set"><span>⚙️</span>সেটিংস</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+const REPO = 'sohelnwu/jj-autopost';
+const API = 'https://api.github.com/repos/' + REPO;
+const BN = '০১২৩৪৫৬৭৮৯';
+const bn = (n) => String(n).replace(/\d/g, (d) => BN[d]);
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('jjs.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('jjs.' + k, JSON.stringify(v)); } catch {} },
+};
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+
+const TOPICS = [
+  ['random', '🔥 র‍্যান্ডম ভাইরাল'], ['bangladesh', 'দেশের খবর'], ['politics-bd', 'দেশের রাজনীতি'], ['politics-world', 'বিশ্ব রাজনীতি'],
+  ['cricket', 'ক্রিকেট'], ['football', 'ফুটবল'], ['sports', 'খেলাধুলা'], ['messi', 'মেসি'], ['ronaldo', 'রোনালদো'],
+  ['players', 'তারকা খেলোয়াড়'], ['entertainment', 'বিনোদন'], ['economy', 'অর্থনীতি'], ['tech', 'প্রযুক্তি'],
+];
+let topic = store.get('topic', 'random');
+let count = store.get('count', 5);
+
+// ---------- নেভিগেশন ----------
+function go(id) {
+  for (const s of document.querySelectorAll('main > section')) s.classList.toggle('hide', s.id !== id);
+  for (const b of document.querySelectorAll('nav button')) b.setAttribute('aria-current', b.dataset.go === id ? 'page' : 'false');
+  if (id === 'v-jobs') loadJobs();
+  scrollTo(0, 0);
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
+
+// ---------- বিষয় ----------
+function drawTopics() {
+  $('#topics').innerHTML = TOPICS.map(([k, l]) => `<button type="button" class="chip${k === 'random' ? ' random' : ''}" data-k="${k}" aria-pressed="${k === topic && !$('#query').value.trim()}">${l}</button>`).join('');
+}
+$('#topics').addEventListener('click', (e) => { const c = e.target.closest('.chip'); if (!c) return; topic = c.dataset.k; store.set('topic', topic); $('#query').value = ''; drawTopics(); });
+$('#query').addEventListener('input', drawTopics);
+const setCount = (n) => { count = Math.max(1, Math.min(10, n)); $('#cnt').textContent = bn(count); store.set('count', count); };
+$('#cMinus').onclick = () => setCount(count - 1); $('#cPlus').onclick = () => setCount(count + 1);
+
+// আউটপুট পছন্দ মনে রাখা
+const outs = () => [...document.querySelectorAll('label.opt input:checked')].map((i) => i.value);
+for (const i of document.querySelectorAll('label.opt input')) {
+  const saved = store.get('outs', null); if (saved) i.checked = saved.includes(i.value);
+  i.addEventListener('change', () => store.set('outs', outs()));
+}
+
+// ---------- চ্যানেল ----------
+async function loadChannels() {
+  let pages = store.get('pages', null);
+  try {
+    const r = await fetch(`https://raw.githubusercontent.com/${REPO}/main/config/pages.json?t=${Date.now()}`);
+    if (r.ok) { pages = (await r.json()).pages.map((p) => ({ id: p.id, name: p.name, accent: p.theme?.accent })); store.set('pages', pages); }
+  } catch {}
+  pages = pages || [{ id: 'jj-news', name: 'JJ News', accent: '#C8102E' }];
+  const cur = store.get('channel', 'jj-news');
+  $('#channel').innerHTML = pages.map((p) => `<option value="${esc(p.id)}" ${p.id === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  const sync = () => { const p = pages.find((x) => x.id === $('#channel').value); if (p?.accent && !store.get('chColorSet', false)) $('#chColor').value = p.accent; };
+  $('#channel').onchange = () => { store.set('channel', $('#channel').value); store.set('chColorSet', false); sync(); };
+  sync();
+}
+$('#chName').value = store.get('chName', ''); $('#chName').oninput = () => store.set('chName', $('#chName').value);
+const savedColor = store.get('chColor', null); if (savedColor) $('#chColor').value = savedColor;
+$('#chColor').oninput = () => { store.set('chColor', $('#chColor').value); store.set('chColorSet', true); };
+
+// ---------- GitHub ----------
+const token = () => store.get('token', '');
+async function gh(path, opts = {}) {
+  const h = { Accept: 'application/vnd.github+json', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) };
+  if (token()) h.Authorization = 'Bearer ' + token();
+  const r = await fetch(path.startsWith('http') ? path : API + path, { ...opts, headers: h });
+  if (!r.ok && r.status !== 404) { const j = await r.json().catch(() => ({})); const e = new Error(j.message || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+  return r.status === 204 ? {} : r.status === 404 ? null : r.json();
+}
+
+$('#tok').value = token();
+$('#saveTok').onclick = async () => {
+  store.set('token', $('#tok').value.trim());
+  $('#tokSt').textContent = 'যাচাই হচ্ছে…';
+  try {
+    const repo = await gh('');
+    if (!repo) throw new Error('রিপো পাওয়া যায়নি');
+    $('#tokSt').textContent = '✅ টোকেন ঠিক আছে'; checkToken(); toast('টোকেন সেভ হয়েছে');
+  } catch (e) { $('#tokSt').textContent = '❌ ' + (e.status === 401 ? 'টোকেন ভুল' : e.message); }
+};
+const checkToken = () => { $('#needToken').hidden = !!token(); };
+
+// ---------- কাজ শুরু ----------
+$('#goBtn').onclick = async () => {
+  if (!token()) { toast('আগে সেটিংসে টোকেন বসান'); go('v-set'); return; }
+  const o = outs(); if (!o.length) { toast('অন্তত একটা জিনিস বাছাই করুন'); return; }
+  const q = $('#query').value.trim();
+  const id = new Date().toISOString().replace(/\D/g, '').slice(2, 14) + Math.random().toString(36).slice(2, 5);
+  const label = q || TOPICS.find(([k]) => k === topic)?.[1].replace('🔥 ', '') || 'খবর';
+  const job = { id, topic: q ? 'custom' : topic, query: q, count, outputs: o,
+    channel: { pageId: $('#channel').value, name: $('#chName').value.trim(), accent: store.get('chColorSet', false) ? $('#chColor').value : '' } };
+  $('#goBtn').disabled = true; $('#goBtn').textContent = 'পাঠানো হচ্ছে…';
+  try {
+    await gh('/actions/workflows/studio.yml/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { job_id: id, job: JSON.stringify(job) } }) });
+    const jobs = store.get('jobs', []); jobs.unshift({ id, label, count, outputs: o, created: Date.now() }); store.set('jobs', jobs.slice(0, 40));
+    toast('কাজ শুরু হয়েছে ✅'); go('v-jobs');
+  } catch (e) {
+    toast(e.status === 401 || e.status === 403 ? 'টোকেনে অনুমতি নেই — সেটিংস দেখুন' : 'শুরু করা যায়নি: ' + e.message);
+  } finally { $('#goBtn').disabled = false; $('#goBtn').textContent = '▶ তৈরি করো'; }
+};
+
+// ---------- ফলাফল ----------
+let runsCache = [], timer;
+function estimate(job) { // আনুমানিক সময় (মিনিট)
+  const n = job.count || 5, o = job.outputs || ['reel', 'card'];
+  return Math.round(2 + n * ((o.includes('reel') ? 0.9 : 0) + (o.includes('card') ? 0.1 : 0)) + (o.includes('headlines-reel') ? 1.5 : 0));
+}
+async function loadJobs() {
+  clearTimeout(timer);
+  const local = store.get('jobs', []);
+  try {
+    const runs = await gh('/actions/workflows/studio.yml/runs?per_page=40');
+    runsCache = runs?.workflow_runs || [];
+  } catch {}
+  // অন্য ডিভাইস থেকে চালানো কাজও দেখানো
+  const known = new Set(local.map((j) => j.id));
+  for (const r of runsCache) { const id = (r.display_title || '').replace(/^studio\s+/, ''); if (id && !known.has(id)) { local.push({ id, label: 'স্টুডিও কাজ', created: Date.parse(r.created_at) }); known.add(id); } }
+  local.sort((a, b) => b.created - a.created);
+  if (!local.length) { $('#jobs').innerHTML = '<div class="empty">এখনো কিছু তৈরি হয়নি</div>'; return; }
+  let running = 0;
+  const html = await Promise.all(local.slice(0, 20).map(async (j) => {
+    const run = runsCache.find((r) => r.display_title === 'studio ' + j.id);
+    const st = !run ? (Date.now() - j.created < 120000 ? 'queued' : 'gone') : run.status !== 'completed' ? 'running' : run.conclusion;
+    if (st === 'queued' || st === 'running') running++;
+    const when = new Date(j.created).toLocaleString('bn-BD', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    let body = '', badge;
+    if (st === 'queued' || st === 'running') {
+      const mins = (Date.now() - (run ? Date.parse(run.run_started_at || run.created_at) : j.created)) / 60000;
+      const est = estimate(j); const pct = Math.min(95, Math.round((mins / est) * 100));
+      badge = `<span class="st run">${st === 'queued' ? 'লাইনে আছে' : `তৈরি হচ্ছে · ${bn(Math.round(mins))}/${bn(est)} মি`}</span>`;
+      body = `<div class="bar"><i style="width:${pct}%"></i></div>`;
+    } else if (st === 'success' || st === 'failure') {
+      const rel = await gh('/releases/tags/studio-' + j.id).catch(() => null);
+      const m = parseManifest(rel?.body);
+      if (m?.files?.length) {
+        badge = `<span class="st ok">✅ ${bn(m.files.length)}টা ফাইল</span>`;
+        const assets = Object.fromEntries((rel.assets || []).map((a) => [a.name, a.browser_download_url]));
+        body = renderResult(j.id, m, assets);
+        if (m.label) j.label = m.label;
+      } else {
+        badge = `<span class="st err">❌ ব্যর্থ</span>`;
+        body = `<div class="news">${esc(m?.error || 'কাজটা শেষ হয়নি। আবার চেষ্টা করুন বা অন্য বিষয় দিন।')}</div>`;
+      }
+    } else if (st === 'gone') { badge = `<span class="st err">খুঁজে পাওয়া যায়নি</span>`; }
+    else { badge = `<span class="st err">${esc(st || 'বাতিল')}</span>`; }
+    const open = store.get('open', {})[j.id] ?? (st === 'success');
+    return `<div class="job" data-id="${esc(j.id)}"><div class="job-h"><div class="t"><b>${esc(j.label)}</b><span class="muted">${when}${j.count ? ' · ' + bn(j.count) + 'টা খবর' : ''}</span></div>${badge}</div><div class="job-b${open ? '' : ' hide'}">${body}</div></div>`;
+  }));
+  $('#jobs').innerHTML = html.join('');
+  $('#runBadge').textContent = bn(running); $('#runBadge').classList.toggle('hide', !running);
+  if (running) timer = setTimeout(() => { if (!$('#v-jobs').classList.contains('hide')) loadJobs(); else refreshBadge(); }, 15000);
+}
+async function refreshBadge() { try { const r = await gh('/actions/workflows/studio.yml/runs?per_page=10&status=in_progress'); const n = r?.total_count || 0; $('#runBadge').textContent = bn(n); $('#runBadge').classList.toggle('hide', !n); if (n) timer = setTimeout(refreshBadge, 20000); } catch {} }
+
+function parseManifest(body) {
+  if (!body) return null;
+  const m = body.match(/```json\s*([\s\S]*?)```/);
+  try { return JSON.parse(m ? m[1] : body); } catch { return null; }
+}
+const captions = {};
+function renderResult(jid, m, assets) {
+  const items = m.files.map((f, i) => {
+    const url = assets[f.file]; const key = jid + ':' + i; captions[key] = f.caption || '';
+    const media = f.kind === 'reel'
+      ? `<video src="${esc(url)}" controls playsinline preload="metadata"></video>`
+      : `<img src="${esc(url)}" loading="lazy" alt="">`;
+    return `<div class="item">${media}<div class="meta"><span class="muted">${f.kind === 'reel' ? '🎬 রিল' + (f.seconds ? ' · ' + bn(f.seconds) + 'সে' : '') : '🖼️ ফটোকার্ড'}</span><b>${esc(f.title)}</b></div>
+      <div class="acts"><a class="btn red" href="${esc(url)}" download="${esc(f.file)}">⬇ ডাউনলোড</a><button class="btn" data-copy="${esc(key)}">📋 ক্যাপশন</button></div></div>`;
+  }).join('');
+  return `<div class="news">চ্যানেল: ${esc(m.channel || '')} · কণ্ঠ: ${esc(m.voice || '')}</div><div class="grid">${items}</div>`;
+}
+$('#jobs').addEventListener('click', async (e) => {
+  const c = e.target.closest('[data-copy]');
+  if (c) {
+    const txt = captions[c.dataset.copy] || '';
+    try { await navigator.clipboard.writeText(txt); toast('ক্যাপশন কপি হয়েছে ✅'); }
+    catch { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('ক্যাপশন কপি হয়েছে'); }
+    return;
+  }
+  const h = e.target.closest('.job-h');
+  if (h) { const id = h.parentElement.dataset.id; const b = h.nextElementSibling; b.classList.toggle('hide'); const o = store.get('open', {}); o[id] = !b.classList.contains('hide'); store.set('open', o); }
+});
+$('#refresh').onclick = loadJobs;
+
+// ---------- শুরু ----------
+drawTopics(); setCount(count); loadChannels(); checkToken(); if (token()) refreshBadge();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 {
-  "paused": false,
+  "paused": true,
   "graphVersion": "v23.0",
   "catchUpHours": 2,
   "news": {
