@@ -149,10 +149,10 @@ export async function buildNewsReel(opts) {
     if (s.kind !== 'item' && s.kind !== 'detail') continue;
     const f0 = Math.floor(s.start * FPS), f1 = Math.min(frames, Math.ceil((s.start + s.dur) * FPS));
     const act = []; let sum = 0;
-    for (let f = f0; f < f1; f++) { const on = (venv[f] || 0) > 0.08 ? 1 : 0; sum += on; act.push(sum); }
+    for (let f = f0; f < f1; f++) { const on = (venv[f] || 0) > 0.16 ? 1 : 0; // নিঃশ্বাস/হালকা আওয়াজ গোনা হয় না sum += on; act.push(sum); }
     if (sum > FPS * 0.4) {
       // প্রতিটা ফ্রেমে কতটা বলা হয়েছে (০–১); একটু আগে দেখানো যাতে শব্দ শোনার সাথে সাথে দেখা যায়
-      const lead = 3;
+      const lead = 1;
       s.curveF0 = f0; s.curve = act.map((_, i) => Math.round((act[Math.min(act.length - 1, i + lead)] / sum) * 1000) / 1000);
       const firstOn = act.findIndex((v) => v > 0); const lastOn = act.indexOf(sum);
       s.revealStart = (f0 + Math.max(0, firstOn)) / FPS; s.revealEnd = (f0 + Math.max(0, lastOn)) / FPS;
