@@ -1,4 +1,4 @@
-// খবরের বিস্তারিত: ৫০–৬০ সেকেন্ডে পড়ার মতো সংবাদপাঠকের স্ক্রিপ্ট।
+// খবরের সারাংশ: শিরোনামসহ পুরো রিল ২০–৪০ সেকেন্ড (কখনো ৪০-এর বেশি নয়)।
 // ১) আসল সংবাদমাধ্যমের পাতা থেকে মূল খবর পড়ে, Gemini নিজের ভাষায় টিভি-সংবাদ বানায় (শুধু সেই তথ্য থেকে)
 // ২) পাতা পড়া না গেলে Gemini + Google Search
 // কোনোটা না হলে null — তখন শুধু শিরোনামের রিল। বানানো তথ্য কখনো নয়।
@@ -15,7 +15,8 @@ const clean = (s) => noLinks(String(s || ''))
   .replace(/\s{2,}/g, ' ').trim();
 
 const RULES = `নিয়ম:
-- প্রমিত বাংলাদেশি বাংলা, সহজ ও স্পষ্ট বাক্য। ১১০ থেকে ১৩০ শব্দ, ৬ থেকে ৮টি ছোট বাক্য — একজন সংবাদপাঠিকা ৫০ থেকে ৬০ সেকেন্ডে পড়বেন।
+- প্রমিত বাংলাদেশি বাংলা, সহজ ও স্পষ্ট বাক্য। শুধু মূল পয়েন্টগুলোর সারাংশ — পুরো খবর নয়। ৩৫ থেকে ৬০ শব্দ, ৩ থেকে ৪টি ছোট বাক্য — সংবাদপাঠিকা ২৫ সেকেন্ডের মধ্যে পড়বেন।
+- প্রথম বাক্যেই সবচেয়ে গুরুত্বপূর্ণ তথ্য; শিরোনামের কথা হুবহু আবার বলবে না।
 - শুধু প্রতিবেদনে থাকা তথ্য: কী ঘটেছে, কোথায়, কখন, কারা, কেন, এরপর কী। অনুমান, মতামত বা বানানো তথ্য একদম নয়।
 - হুবহু কপি নয় — নিজের ভাষায় টিভি সংবাদের মতো করে লেখো।
 - কোনো সংবাদমাধ্যমের নাম, "সূত্র জানায়", চ্যানেলের নাম, শুভেচ্ছা, "ফলো করুন", "সঙ্গে থাকুন", লিংক, ইমোজি, হ্যাশট্যাগ লিখবে না।
@@ -36,13 +37,13 @@ export function relevant(title, text) {
   return hit / words.length >= 0.4;
 }
 
-// Gemini সময়মতো না পারলে: প্রতিবেদনের শুরুর অংশ থেকে মূল কথাগুলো (প্রায় ১১০ শব্দ)
+// Gemini সময়মতো না পারলে: প্রতিবেদনের শুরুর অংশ থেকে মূল কথাগুলো (প্রায় ৫৫ শব্দ)
 function leadSentences(article) {
   const sents = article.replace(/\n+/g, ' ').split(/(?<=[।!?])\s+/).map((x) => clean(x))
     .filter((x) => x.length > 25 && x.length < 260 && !/^[^।]{0,40}(প্রতিনিধি|ডেস্ক|অনলাইন)\s*[:,]/.test(x));
   const out = []; let w = 0;
-  for (const x of sents) { const n = x.split(/\s+/).length; if (w + n > 125 && out.length >= 3) break; out.push(x); w += n; }
-  return w >= 50 ? { sentences: out, words: w } : null;
+  for (const x of sents) { const n = x.split(/\s+/).length; if (w + n > 60 && out.length >= 2) break; out.push(x); w += n; }
+  return w >= 25 ? { sentences: out, words: w } : null;
 }
 
 export async function newsDetail(item, { deadline } = {}) {
@@ -87,9 +88,9 @@ ${RULES}`, { search: true, deadline });
     if (s.length > 6) body.push(...s.split(/(?<=[।!?])\s+/).filter((x) => x.length > 3));
   }
   const words = body.join(' ').split(/\s+/).length;
-  if (body.length < 3 || words < 50) return null; // খুব ছোট — নির্ভরযোগ্য না
-  // ৬০ সেকেন্ডের মধ্যে রাখতে (প্রায় ১৪৫ শব্দ পর্যন্ত)
+  if (body.length < 2 || words < 25) return null; // খুব ছোট — নির্ভরযোগ্য না
+  // পুরো রিল ৪০ সেকেন্ডের মধ্যে রাখতে সারাংশ সর্বোচ্চ প্রায় ৬৫ শব্দ (শিরোনাম + শুরু/শেষ মিলিয়ে)
   const out = []; let w = 0;
-  for (const s of body) { const n = s.split(/\s+/).length; if (w + n > 145 && out.length >= 4) break; out.push(s); w += n; }
+  for (const s of body) { const n = s.split(/\s+/).length; if (w + n > 65 && out.length >= 2) break; out.push(s); w += n; }
   return { headline: headline || clean(item.title), sentences: out, words: w };
 }

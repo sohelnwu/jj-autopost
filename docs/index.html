@@ -106,7 +106,7 @@
 
     <div class="card">
       <h2><span class="step">৩</span> কী কী বানাবো?</h2>
-      <label class="opt"><input type="checkbox" value="reel" checked><span>প্রতিটা খবরের <b>ব্রেকিং রিল (বিস্তারিত)</b><small>শিরোনাম, তারপর পুরো খবর · মেয়ের কণ্ঠে, শব্দে শব্দে লেখা ওঠে · ৫০–৬০ সেকেন্ড</small></span></label>
+      <label class="opt"><input type="checkbox" value="reel" checked><span>প্রতিটা খবরের <b>ব্রেকিং রিল (সারাংশসহ)</b><small>শিরোনাম, তারপর মূল পয়েন্টগুলো · মেয়ের কণ্ঠে, শব্দে শব্দে লেখা ওঠে · ২০–৪০ সেকেন্ড</small></span></label>
       <label class="opt"><input type="checkbox" value="card" checked><span>প্রতিটা খবরের <b>ফটোকার্ড</b><small>টিভি-নিউজ ধাঁচের ব্রেকিং কার্ড</small></span></label>
       <label class="opt"><input type="checkbox" value="headlines-reel"><span>সব মিলিয়ে <b>সংবাদ শিরোনাম রিল</b><small>সব খবর এক রিলে, সংবাদপাঠিকার মতো · ৩০–৬০ সেকেন্ড</small></span></label>
       <label class="opt"><input type="checkbox" value="headlines-card"><span>সব মিলিয়ে <b>সেরা খবর কার্ড</b><small>এক কার্ডে সব শিরোনাম</small></span></label>
@@ -127,7 +127,7 @@
     </div>
 
     <button class="go" id="goBtn">▶ তৈরি করো</button>
-    <p class="muted" style="text-align:center;margin-top:10px">৫টা খবরের রিল+কার্ডে সাধারণত ১০–১২ মিনিট লাগে। অ্যাপ বন্ধ করলেও কাজ চলতে থাকবে — পরে "ফলাফল" এ দেখবেন।</p>
+    <p class="muted" style="text-align:center;margin-top:10px">৫টা খবরের রিল+কার্ডে সাধারণত ৫–৮ মিনিট লাগে। অ্যাপ বন্ধ করলেও কাজ চলতে থাকবে — পরে "ফলাফল" এ দেখবেন।</p>
   </section>
 
   <!-- ===== ফলাফল ===== -->
@@ -318,7 +318,7 @@ async function startJob(job, label) {
 let runsCache = [], timer;
 function estimate(job) { // আনুমানিক সময় (মিনিট)
   const n = job.count || 5, o = job.outputs || ['reel', 'card'];
-  return Math.round(3 + n * ((o.includes('reel') ? 1.3 : 0) + (o.includes('card') ? 0.1 : 0)) + (o.includes('headlines-reel') ? 1.5 : 0));
+  return Math.round(3 + n * ((o.includes('reel') ? 0.9 : 0) + (o.includes('card') ? 0.1 : 0)) + (o.includes('headlines-reel') ? 1.5 : 0));
 }
 async function loadJobs() {
   clearTimeout(timer);

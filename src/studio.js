@@ -139,7 +139,13 @@ export async function main() {
       // ইংরেজি-মেশানো শিরোনাম হলে Gemini-র বাংলা শিরোনাম দেখানো ও পড়া
       const latin = (it.title.match(/[A-Za-z]/g) || []).length / it.title.length;
       const shown = latin > 0.25 && it.detail?.headline && !it.detail.extractive ? it.detail.headline : it.title;
-      const r = await buildNewsReel({ page, t, dateText: bnDate(t), breaking: true, items: [{ ...it, title: shown, label: 'ব্রেকিং', topic }], outDir: 'out/studio', name: `reel-${n}`, getBrowser, seed: `${t.iso}|${job.id}|${n}`, voice });
+      let r = await buildNewsReel({ page, t, dateText: bnDate(t), breaking: true, items: [{ ...it, title: shown, label: 'ব্রেকিং', topic }], outDir: 'out/studio', name: `reel-${n}`, getBrowser, seed: `${t.iso}|${job.id}|${n}`, voice });
+      // কখনো ৪০ সেকেন্ডের বেশি নয়: বেশি হলে শেষ বাক্য বাদ দিয়ে আবার
+      while (r.seconds > 40.5 && it.detail?.sentences.length > 2) {
+        it.detail.sentences.pop();
+        console.log(`   ✂️ রিল ${n} ${r.seconds.toFixed(0)} সেকেন্ড — একটা বাক্য কমিয়ে আবার`);
+        r = await buildNewsReel({ page, t, dateText: bnDate(t), breaking: true, items: [{ ...it, title: shown, label: 'ব্রেকিং', topic }], outDir: 'out/studio', name: `reel-${n}`, getBrowser, seed: `${t.iso}|${job.id}|${n}`, voice });
+      }
       copyFileSync(r.file, `dist/reel-${n}.mp4`);
       let caption = R.reelBreaking(base, { item: it, topic }).caption;
       if (it.detail) { const parts = caption.split('\n\n'); parts.splice(1, 0, it.detail.sentences.join(' ')); caption = parts.join('\n\n'); }
