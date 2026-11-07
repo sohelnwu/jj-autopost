@@ -12,7 +12,8 @@ const KEYS = (() => {
   const start = uniq.length ? new Date().getUTCHours() % uniq.length : 0;
   return [...uniq.slice(start), ...uniq.slice(0, start)];
 })();
-const dead = new Set(); // এই রানে সীমা-শেষ কী
+const dead = new Set(); // এই রানে সীমা-শেষ কী (ভয়েস)
+const deadText = new Set(); // লেখার মডেলের সীমা আলাদা
 const KEY = () => KEYS.find((k) => !dead.has(k)) || '';
 export const geminiKeyCount = KEYS.length;
 const TRIM = 'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse';
@@ -119,8 +120,44 @@ export function splitBySilence(wav, lens, base) {
   return out;
 }
 
+// একসাথে কয়েকটা রিল বানালেও ভয়েসের অনুরোধ একটা একটা করে যায় (Gemini-র মিনিটপ্রতি সীমা যেন না ভাঙে)
+let voiceQueue = Promise.resolve();
+export function speakSegments(texts, base, opts = {}) {
+  const run = voiceQueue.then(() => speakSegments0(texts, base, opts));
+  voiceQueue = run.catch(() => {});
+  return run;
+}
+
+// Gemini দিয়ে লেখা তৈরি (Google Search থেকে তথ্য নিয়ে)। কী শেষ হলে পরের কী। ব্যর্থ হলে null।
+export async function geminiText(prompt, { search = true, models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'] } = {}) {
+  for (const model of models) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const key = KEYS.find((k) => !deadText.has(k)); if (!key) return null;
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            ...(search ? { tools: [{ google_search: {} }] } : {}),
+            generationConfig: { temperature: 0.2 },
+          }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (r.status === 429 || r.status === 403) { deadText.add(key); continue; }
+        if (r.status >= 500) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
+        if (!r.ok) { console.log(`   ⚠️ ${model}: ${(j.error?.message || r.status).toString().slice(0, 140)}`); break; }
+        const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
+        if (text) return text;
+        break;
+      } catch (e) { console.log(`   ⚠️ ${model}: ${e.message}`); break; }
+    }
+  }
+  return null;
+}
+
 // কয়েকটা অংশের ভয়েস — সব অংশ একই কণ্ঠে (Gemini একবারে, না হলে সব Microsoft)
-export async function speakSegments(texts, base, opts = {}) {
+async function speakSegments0(texts, base, opts = {}) {
   const idx = texts.map((t, i) => (t ? i : -1)).filter((i) => i >= 0);
   const res = texts.map(() => null);
   if (!idx.length) return res;

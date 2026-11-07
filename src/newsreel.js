@@ -57,16 +57,21 @@ export async function buildNewsReel(opts) {
   const [brandA, ...rest] = String(page.logoText || page.name).split(/\s+/);
   const segs = [];
   // ---------- স্ক্রিপ্ট ----------
-  if (opts.breaking) segs.push({ kind: 'intro', say: 'ব্রেকিং নিউজ।', min: 1.6 });
-  else segs.push({ kind: 'intro', say: `${page.name}। ${opts.introSay || 'এই মুহূর্তের গুরুত্বপূর্ণ খবরগুলো।'}`, min: 2.2 });
+  // শুধু খবর পড়া হয় — সূত্র, চ্যানেলের নাম বা "ফলো করুন" মুখে বলা হয় না (সূত্র শুধু পর্দায় লেখা থাকে)
+  if (opts.breaking) segs.push({ kind: 'intro', say: '', min: 1.5 });
+  else segs.push({ kind: 'intro', say: opts.introSay || 'এই মুহূর্তের গুরুত্বপূর্ণ খবর।', min: 2.2 });
   items.forEach((it, i) => {
     const cat = catOf(it);
     const link = i === 0 ? '' : `${pick(LINK[cat] || LINK.news, `${opts.seed}|${i}`)} `;
     const body = sayClean(it.title);
-    const src = opts.breaking && it.source ? ` খবরটি জানিয়েছে ${sayClean(it.source).replace(/।$/, '')}।` : '';
-    segs.push({ kind: 'item', title: noLinks(it.title), source: noLinks(it.source || ''), label: it.label || 'খবর', cat: cat === 'sports' ? 'sports' : 'news', say: `${link}${body}${src}`, linkLen: link.length, n: i + 1, of: items.length, min: 3.2 });
+    const c2 = cat === 'sports' ? 'sports' : 'news';
+    segs.push({ kind: 'item', title: noLinks(it.title), source: noLinks(it.source || ''), label: it.label || 'খবর', cat: c2, say: `${link}${body}`, linkLen: link.length, n: i + 1, of: items.length, min: 3.2 });
+    // বিস্তারিত: প্রতিটা বাক্য আলাদা অংশ — বলার সাথে সাথে শব্দে শব্দে লেখা ওঠে
+    (it.detail?.sentences || []).forEach((sen, k, all) => {
+      segs.push({ kind: 'detail', title: noLinks(it.title), text: noLinks(sen), source: noLinks(it.source || ''), label: 'বিস্তারিত', cat: c2, say: sayClean(sen), linkLen: 0, k: k + 1, of: all.length, min: 2.4 });
+    });
   });
-  segs.push({ kind: 'outro', say: opts.breaking ? `বিস্তারিত আসছে। সঙ্গেই থাকুন ${page.name}-এর।` : `আরও খবরের জন্য ${page.name}-এর সঙ্গেই থাকুন।`, min: 2.6 });
+  segs.push({ kind: 'outro', say: '', min: 1.8 });
 
   // ---------- ভয়েস ----------
   const auds = await speakSegments(segs.map((s) => s.say), `${dir}/v`, { style: 'news', ...opts.voice });
@@ -74,13 +79,13 @@ export async function buildNewsReel(opts) {
   // ---------- সময়রেখা ----------
   let cur = 0.3;
   for (const s of segs) {
-    const speakDur = s.adur || (s.say.length / 13); // ভয়েস না থাকলে পড়ার আনুমানিক সময়
+    const speakDur = s.adur || (s.say.length / 14); // ভয়েস না থাকলে পড়ার আনুমানিক সময়
     s.start = cur; s.voiceAt = cur + 0.15;
     s.dur = Math.max(s.min, speakDur + 0.15 + GAP);
-    if (s.kind === 'item') {
+    if (s.kind === 'item' || s.kind === 'detail') {
       const share = s.linkLen ? s.linkLen / s.say.length : 0;
       s.revealStart = s.voiceAt + speakDur * share;
-      s.revealEnd = s.voiceAt + speakDur * 0.9;
+      s.revealEnd = s.voiceAt + speakDur * (s.kind === 'detail' ? 0.95 : 0.9);
     }
     cur += s.dur;
   }

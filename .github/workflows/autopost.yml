@@ -58,14 +58,16 @@ jobs:
         with:
           node-version: 22
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-shell-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: প্যাকেজ ও ব্রাউজার ইনস্টল
         run: |
-          npm ci
+          npm ci --no-audit --no-fund
           if [ "${{ inputs.type }}" = "check-tokens" ]; then exit 0; fi
-          npx playwright install --with-deps chromium
-          which ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
-          pip install --quiet --user --break-system-packages edge-tts || pipx install edge-tts || echo "edge-tts ইনস্টল হয়নি — রিল ভয়েস ছাড়া হবে"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          bash scripts/setup-ci.sh
           git config user.name "jj-autopost-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 

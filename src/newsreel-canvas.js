@@ -176,6 +176,16 @@
         ctx.globalAlpha = vis * a; ctx.font = F(500, 34); ctx.fillStyle = 'rgba(255,255,255,0.8)';
         ctx.fillText('সূত্র: ' + seg.source, 60, Math.min(endY + 70, 1220));
       }
+    } else if (seg.kind === 'detail') {
+      // উপরে ছোট করে শিরোনাম, নিচে বড় করে এখন যে বাক্যটা পড়া হচ্ছে
+      const w = pill(60, 300, seg.label, S.accent, '#fff', 34);
+      ctx.font = F(700, 34); ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillText(`${bn(seg.k)}/${bn(seg.of)}`, 60 + w + 22, 343);
+      const H2 = seg._H; ctx.font = F(700, H2.s); ctx.fillStyle = '#FFD23F';
+      H2.lines.forEach((l, i) => ctx.fillText(l, 60, 440 + H2.s + i * H2.s * 1.3));
+      const hy = 440 + H2.lines.length * H2.s * 1.3 + 40;
+      ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(60, hy, W - 120, 3);
+      ctx.fillStyle = S.accent; ctx.fillRect(60, hy, (W - 120) * clamp(segT), 3);
+      headline(seg, segT, absT, hy + 30, 1200 - hy - 40);
     } else if (seg.kind === 'outro') {
       ctx.textAlign = 'center'; ctx.font = F(800, 96, 'Baloo'); ctx.fillStyle = '#fff'; ctx.fillText(S.outroTop, W / 2, 640);
       ctx.font = F(800, 120, 'Baloo'); const a = S.brandA, b = S.brandB.toUpperCase();
@@ -198,6 +208,12 @@
         seg._words = seg.title.split(/\s+/).filter(Boolean).length;
         const ci = seg.title.search(/[:：]/);
         seg._hiWords = ci > 3 && ci < seg.title.length * 0.55 ? seg.title.slice(0, ci + 1).split(/\s+/).filter(Boolean).length : 0;
+      } else if (seg.kind === 'detail') {
+        seg._H = fit(seg.title, 700, W - 120, 210, 50, 38, 1.3);
+        if (seg._H.lines.length > 3) seg._H.lines = [...seg._H.lines.slice(0, 2), seg._H.lines[2] + '…'];
+        const hy = 440 + seg._H.lines.length * seg._H.s * 1.3 + 40;
+        seg._L = fit(seg.text, 700, W - 120, 1200 - hy - 70, 70, 46, 1.3);
+        seg._words = seg.text.split(/\s+/).filter(Boolean).length; seg._hiWords = 0;
       } else if (seg.kind === 'intro') {
         ctx.font = F(800, 132, 'Baloo'); seg._L = { lines: wrap(S.title, W - 160) };
       }
@@ -213,7 +229,7 @@
     topBar(t); progress(si, segT);
     drawSeg(seg, segT, t, fi);
     voiceStrip(fi, t);
-    lowerThird(seg.kind === 'item' ? (S.breaking ? 'ব্রেকিং' : seg.label) : S.breaking ? 'ব্রেকিং' : 'সংবাদ', seg.kind === 'item' && seg.source ? `${S.pageName} | সূত্র: ${seg.source}` : `${S.pageName} | ${S.date}`);
+    lowerThird(seg.kind === 'item' ? (S.breaking ? 'ব্রেকিং' : seg.label) : seg.kind === 'detail' ? 'বিস্তারিত' : S.breaking ? 'ব্রেকিং' : 'সংবাদ', (seg.kind === 'item' || seg.kind === 'detail') && seg.source ? `${S.pageName} | সূত্র: ${seg.source}` : `${S.pageName} | ${S.date}`);
     ticker(t);
     if (t < 0.35) { ctx.fillStyle = `rgba(0,0,0,${1 - t / 0.35})`; ctx.fillRect(0, 0, W, H); }
     return cv.toDataURL('image/jpeg', 0.9);

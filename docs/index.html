@@ -106,7 +106,7 @@
 
     <div class="card">
       <h2><span class="step">৩</span> কী কী বানাবো?</h2>
-      <label class="opt"><input type="checkbox" value="reel" checked><span>প্রতিটা খবরের <b>ব্রেকিং রিল</b><small>মেয়ের কণ্ঠে খবর পড়া, শব্দে শব্দে লেখা ওঠে · ১০–২০ সেকেন্ড</small></span></label>
+      <label class="opt"><input type="checkbox" value="reel" checked><span>প্রতিটা খবরের <b>ব্রেকিং রিল (বিস্তারিত)</b><small>শিরোনাম, তারপর পুরো খবর · মেয়ের কণ্ঠে, শব্দে শব্দে লেখা ওঠে · ৫০–৬০ সেকেন্ড</small></span></label>
       <label class="opt"><input type="checkbox" value="card" checked><span>প্রতিটা খবরের <b>ফটোকার্ড</b><small>টিভি-নিউজ ধাঁচের ব্রেকিং কার্ড</small></span></label>
       <label class="opt"><input type="checkbox" value="headlines-reel"><span>সব মিলিয়ে <b>সংবাদ শিরোনাম রিল</b><small>সব খবর এক রিলে, সংবাদপাঠিকার মতো · ৩০–৬০ সেকেন্ড</small></span></label>
       <label class="opt"><input type="checkbox" value="headlines-card"><span>সব মিলিয়ে <b>সেরা খবর কার্ড</b><small>এক কার্ডে সব শিরোনাম</small></span></label>
@@ -115,14 +115,19 @@
     <div class="card">
       <h2><span class="step">৪</span> কোন চ্যানেলের নামে?</h2>
       <select id="channel"></select>
-      <div class="row" style="margin-top:10px">
-        <input type="text" id="chName" placeholder="অন্য নাম দিতে চাইলে (ঐচ্ছিক)">
-        <input type="color" id="chColor" value="#C8102E" style="width:56px;height:46px;border:0;background:none" title="রং">
+      <div id="newCh" class="row" style="margin-top:10px" hidden>
+        <input type="text" id="chName" maxlength="30" placeholder="নতুন চ্যানেলের নাম, যেমন: Desh News">
+        <button class="btn red" id="chSave" type="button" style="flex:0 0 auto">সেভ</button>
+      </div>
+      <div class="row" style="margin-top:10px;align-items:center">
+        <span class="muted" style="flex:1">চ্যানেলের রং</span>
+        <button class="btn" id="chDel" type="button" style="flex:0 0 auto" hidden>🗑 এই চ্যানেল মুছুন</button>
+        <input type="color" id="chColor" value="#C8102E" style="width:56px;height:46px;border:0;background:none;flex:0 0 auto" title="রং">
       </div>
     </div>
 
     <button class="go" id="goBtn">▶ তৈরি করো</button>
-    <p class="muted" style="text-align:center;margin-top:10px">তৈরি হতে সাধারণত ৩–১০ মিনিট লাগে। অ্যাপ বন্ধ করলেও কাজ চলতে থাকবে — পরে "ফলাফল" এ দেখবেন।</p>
+    <p class="muted" style="text-align:center;margin-top:10px">৫টা খবরের রিল+কার্ডে সাধারণত ১০–১২ মিনিট লাগে। অ্যাপ বন্ধ করলেও কাজ চলতে থাকবে — পরে "ফলাফল" এ দেখবেন।</p>
   </section>
 
   <!-- ===== ফলাফল ===== -->
@@ -212,22 +217,58 @@ for (const i of document.querySelectorAll('label.opt input')) {
 }
 
 // ---------- চ্যানেল ----------
+// তালিকা: GitHub-এর পেজগুলো + নিজের যোগ করা চ্যানেল (এই ফোনে সেভ থাকে) + "নতুন চ্যানেল"
+let basePages = [];
+const myCh = () => store.get('myChannels', []);
+const allCh = () => [...basePages, ...myCh()];
+const curCh = () => allCh().find((x) => x.id === $('#channel').value) || basePages[0];
+function drawChannels(sel) {
+  const cur = sel || store.get('channel', 'jj-news');
+  const opt = (p) => `<option value="${esc(p.id)}" ${p.id === cur ? 'selected' : ''}>${esc(p.name)}</option>`;
+  $('#channel').innerHTML = basePages.map(opt).join('')
+    + (myCh().length ? `<optgroup label="আমার চ্যানেল">${myCh().map(opt).join('')}</optgroup>` : '')
+    + `<option value="__new">➕ নতুন চ্যানেল যোগ করুন…</option>`;
+  if (!allCh().some((p) => p.id === cur)) $('#channel').value = basePages[0]?.id || 'jj-news';
+  syncCh();
+}
+function syncCh() {
+  const v = $('#channel').value; const isNew = v === '__new';
+  $('#newCh').style.display = isNew ? 'flex' : 'none'; $('#chDel').style.display = v.startsWith('my-') ? '' : 'none';
+  if (isNew) { $('#chName').focus(); return; }
+  store.set('channel', v);
+  const p = curCh(); const colors = store.get('chColors', {});
+  $('#chColor').value = colors[p.id] || p.accent || '#C8102E';
+}
 async function loadChannels() {
-  let pages = store.get('pages', null);
+  basePages = store.get('pages', null);
   try {
     const r = await fetch(`https://raw.githubusercontent.com/${REPO}/main/config/pages.json?t=${Date.now()}`);
-    if (r.ok) { pages = (await r.json()).pages.map((p) => ({ id: p.id, name: p.name, accent: p.theme?.accent })); store.set('pages', pages); }
+    if (r.ok) { basePages = (await r.json()).pages.map((p) => ({ id: p.id, name: p.name, accent: p.theme?.accent })); store.set('pages', basePages); }
   } catch {}
-  pages = pages || [{ id: 'jj-news', name: 'JJ News', accent: '#C8102E' }];
-  const cur = store.get('channel', 'jj-news');
-  $('#channel').innerHTML = pages.map((p) => `<option value="${esc(p.id)}" ${p.id === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
-  const sync = () => { const p = pages.find((x) => x.id === $('#channel').value); if (p?.accent && !store.get('chColorSet', false)) $('#chColor').value = p.accent; };
-  $('#channel').onchange = () => { store.set('channel', $('#channel').value); store.set('chColorSet', false); sync(); };
-  sync();
+  basePages = basePages || [{ id: 'jj-news', name: 'JJ News', accent: '#C8102E' }];
+  drawChannels();
 }
-$('#chName').value = store.get('chName', ''); $('#chName').oninput = () => store.set('chName', $('#chName').value);
-const savedColor = store.get('chColor', null); if (savedColor) $('#chColor').value = savedColor;
-$('#chColor').oninput = () => { store.set('chColor', $('#chColor').value); store.set('chColorSet', true); };
+$('#channel').onchange = syncCh;
+$('#chSave').onclick = () => {
+  const name = $('#chName').value.trim().replace(/\s+/g, ' ');
+  if (!name) { toast('চ্যানেলের নাম লিখুন'); return; }
+  const list = myCh(); const id = 'my-' + Date.now().toString(36);
+  list.push({ id, name, accent: $('#chColor').value }); store.set('myChannels', list);
+  $('#chName').value = ''; drawChannels(id); toast(`"${name}" যোগ হয়েছে ✅`);
+};
+$('#chDel').onclick = () => {
+  const p = curCh(); if (!p?.id.startsWith('my-')) return;
+  if (!confirm(`"${p.name}" চ্যানেলটা তালিকা থেকে মুছবেন?`)) return;
+  store.set('myChannels', myCh().filter((x) => x.id !== p.id)); drawChannels(basePages[0]?.id);
+};
+$('#chColor').oninput = () => {
+  const p = curCh(); if (!p || $('#channel').value === '__new') return;
+  const c = store.get('chColors', {}); c[p.id] = $('#chColor').value; store.set('chColors', c);
+};
+function channelForJob() {
+  const p = curCh(); const custom = p.id.startsWith('my-');
+  return { pageId: custom ? 'jj-news' : p.id, name: custom ? p.name : '', accent: $('#chColor').value };
+}
 
 // ---------- GitHub ----------
 const token = () => store.get('token', '');
@@ -258,34 +299,38 @@ $('#goBtn').onclick = async () => {
   const q = $('#query').value.trim();
   const id = new Date().toISOString().replace(/\D/g, '').slice(2, 14) + Math.random().toString(36).slice(2, 5);
   const label = q || TOPICS.find(([k]) => k === topic)?.[1].replace('🔥 ', '') || 'খবর';
-  const job = { id, topic: q ? 'custom' : topic, query: q, count, outputs: o,
-    channel: { pageId: $('#channel').value, name: $('#chName').value.trim(), accent: store.get('chColorSet', false) ? $('#chColor').value : '' } };
+  if ($('#channel').value === '__new') { toast('আগে নতুন চ্যানেলের নাম সেভ করুন'); return; }
+  const job = { id, topic: q ? 'custom' : topic, query: q, count, outputs: o, channel: channelForJob() };
   $('#goBtn').disabled = true; $('#goBtn').textContent = 'পাঠানো হচ্ছে…';
+  try { await startJob(job, label); } finally { $('#goBtn').disabled = false; $('#goBtn').textContent = '▶ তৈরি করো'; }
+};
+async function startJob(job, label) {
   try {
-    await gh('/actions/workflows/studio.yml/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { job_id: id, job: JSON.stringify(job) } }) });
-    const jobs = store.get('jobs', []); jobs.unshift({ id, label, count, outputs: o, created: Date.now() }); store.set('jobs', jobs.slice(0, 40));
+    await gh('/actions/workflows/studio.yml/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { job_id: job.id, job: JSON.stringify(job) } }) });
+    const jobs = store.get('jobs', []); jobs.unshift({ id: job.id, label, count: job.count, outputs: job.outputs, job, created: Date.now() }); store.set('jobs', jobs.slice(0, 40));
     toast('কাজ শুরু হয়েছে ✅'); go('v-jobs');
   } catch (e) {
     toast(e.status === 401 || e.status === 403 ? 'টোকেনে অনুমতি নেই — সেটিংস দেখুন' : 'শুরু করা যায়নি: ' + e.message);
-  } finally { $('#goBtn').disabled = false; $('#goBtn').textContent = '▶ তৈরি করো'; }
-};
+  }
+}
 
 // ---------- ফলাফল ----------
 let runsCache = [], timer;
 function estimate(job) { // আনুমানিক সময় (মিনিট)
   const n = job.count || 5, o = job.outputs || ['reel', 'card'];
-  return Math.round(2 + n * ((o.includes('reel') ? 0.9 : 0) + (o.includes('card') ? 0.1 : 0)) + (o.includes('headlines-reel') ? 1.5 : 0));
+  return Math.round(3 + n * ((o.includes('reel') ? 1.3 : 0) + (o.includes('card') ? 0.1 : 0)) + (o.includes('headlines-reel') ? 1.5 : 0));
 }
 async function loadJobs() {
   clearTimeout(timer);
-  const local = store.get('jobs', []);
+  const hidden = new Set(store.get('hidden', []));
+  const local = store.get('jobs', []).filter((j) => !hidden.has(j.id));
   try {
     const runs = await gh('/actions/workflows/studio.yml/runs?per_page=40');
     runsCache = runs?.workflow_runs || [];
   } catch {}
   // অন্য ডিভাইস থেকে চালানো কাজও দেখানো
   const known = new Set(local.map((j) => j.id));
-  for (const r of runsCache) { const id = (r.display_title || '').replace(/^studio\s+/, ''); if (id && !known.has(id)) { local.push({ id, label: 'স্টুডিও কাজ', created: Date.parse(r.created_at) }); known.add(id); } }
+  for (const r of runsCache) { const id = (r.display_title || '').replace(/^studio\s+/, ''); if (id && !known.has(id) && !hidden.has(id)) { local.push({ id, label: 'স্টুডিও কাজ', created: Date.parse(r.created_at) }); known.add(id); } }
   local.sort((a, b) => b.created - a.created);
   if (!local.length) { $('#jobs').innerHTML = '<div class="empty">এখনো কিছু তৈরি হয়নি</div>'; return; }
   let running = 0;
@@ -310,11 +355,12 @@ async function loadJobs() {
         if (m.label) j.label = m.label;
       } else {
         badge = `<span class="st err">❌ ব্যর্থ</span>`;
-        body = `<div class="news">${esc(m?.error || 'কাজটা শেষ হয়নি। আবার চেষ্টা করুন বা অন্য বিষয় দিন।')}</div>`;
+        body = `<div class="news">${esc(m?.error || 'কাজটা শেষ হয়নি।')}</div>${failActs(j)}`;
       }
-    } else if (st === 'gone') { badge = `<span class="st err">খুঁজে পাওয়া যায়নি</span>`; }
-    else { badge = `<span class="st err">${esc(st || 'বাতিল')}</span>`; }
-    const open = store.get('open', {})[j.id] ?? (st === 'success');
+    } else if (st === 'gone') { badge = `<span class="st err">খুঁজে পাওয়া যায়নি</span>`; body = failActs(j); }
+    else { badge = `<span class="st err">${esc(st === 'cancelled' ? 'বাতিল' : st || 'বাতিল')}</span>`; body = failActs(j); }
+    if (st !== 'success' && st !== 'queued' && st !== 'running') j._fail = true;
+    const open = store.get('open', {})[j.id] ?? (st === 'success' || !!j._fail);
     return `<div class="job" data-id="${esc(j.id)}"><div class="job-h"><div class="t"><b>${esc(j.label)}</b><span class="muted">${when}${j.count ? ' · ' + bn(j.count) + 'টা খবর' : ''}</span></div>${badge}</div><div class="job-b${open ? '' : ' hide'}">${body}</div></div>`;
   }));
   $('#jobs').innerHTML = html.join('');
@@ -328,6 +374,10 @@ function parseManifest(body) {
   const m = body.match(/```json\s*([\s\S]*?)```/);
   try { return JSON.parse(m ? m[1] : body); } catch { return null; }
 }
+// ব্যর্থ কাজ: একই কাজ আবার চালানো, বা তালিকা থেকে সরানো
+function failActs(j) {
+  return `<div class="acts" style="padding:0 14px 14px">${j.job ? `<button class="btn red" data-retry="${esc(j.id)}">🔁 আবার চেষ্টা</button>` : ''}<button class="btn" data-hide="${esc(j.id)}">✕ তালিকা থেকে সরাও</button></div>`;
+}
 const captions = {};
 function renderResult(jid, m, assets) {
   const items = m.files.map((f, i) => {
@@ -335,7 +385,7 @@ function renderResult(jid, m, assets) {
     const media = f.kind === 'reel'
       ? `<video src="${esc(url)}" controls playsinline preload="metadata"></video>`
       : `<img src="${esc(url)}" loading="lazy" alt="">`;
-    return `<div class="item">${media}<div class="meta"><span class="muted">${f.kind === 'reel' ? '🎬 রিল' + (f.seconds ? ' · ' + bn(f.seconds) + 'সে' : '') : '🖼️ ফটোকার্ড'}</span><b>${esc(f.title)}</b></div>
+    return `<div class="item">${media}<div class="meta"><span class="muted">${f.kind === 'reel' ? '🎬 রিল' + (f.seconds ? ' · ' + bn(f.seconds) + 'সে' : '') : '🖼️ ফটোকার্ড'}</span><b>${esc(f.title)}</b>${f.note ? `<span class="muted" style="color:#FBBF24">⚠ ${esc(f.note)}</span>` : ''}</div>
       <div class="acts"><a class="btn red" href="${esc(url)}" download="${esc(f.file)}">⬇ ডাউনলোড</a><button class="btn" data-copy="${esc(key)}">📋 ক্যাপশন</button></div></div>`;
   }).join('');
   return `<div class="news">চ্যানেল: ${esc(m.channel || '')} · কণ্ঠ: ${esc(m.voice || '')}</div><div class="grid">${items}</div>`;
@@ -348,6 +398,16 @@ $('#jobs').addEventListener('click', async (e) => {
     catch { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('ক্যাপশন কপি হয়েছে'); }
     return;
   }
+  const rt = e.target.closest('[data-retry]');
+  if (rt) {
+    const old = store.get('jobs', []).find((x) => x.id === rt.dataset.retry); if (!old?.job) return;
+    rt.disabled = true;
+    const id = new Date().toISOString().replace(/\D/g, '').slice(2, 14) + Math.random().toString(36).slice(2, 5);
+    store.set('hidden', [...store.get('hidden', []), old.id].slice(-200));
+    await startJob({ ...old.job, id }, old.label); loadJobs(); return;
+  }
+  const hd = e.target.closest('[data-hide]');
+  if (hd) { store.set('hidden', [...store.get('hidden', []), hd.dataset.hide].slice(-200)); loadJobs(); return; }
   const h = e.target.closest('.job-h');
   if (h) { const id = h.parentElement.dataset.id; const b = h.nextElementSibling; b.classList.toggle('hide'); const o = store.get('open', {}); o[id] = !b.classList.contains('hide'); store.set('open', o); }
 });

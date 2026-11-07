@@ -38,14 +38,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
-      - name: প্যাকেজ ইনস্টল
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-shell-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: প্যাকেজ ইনস্টল (দ্রুত)
+        timeout-minutes: 15
         run: |
-          npm ci
-          npx playwright install --with-deps chromium
-          which ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
-          pip install --quiet --user --break-system-packages edge-tts || pipx install edge-tts || true
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          npm ci --no-audit --no-fund
+          bash scripts/setup-ci.sh
 
       - name: খবর খুঁজে রিল/কার্ড বানানো
         env:

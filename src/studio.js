@@ -16,6 +16,16 @@ import { renderCard, closeBrowser, getBrowser } from './render.js';
 import { buildNewsReel } from './newsreel.js';
 import { voiceStatus } from './voice.js';
 import { noLinks } from './design.js';
+import { newsDetail } from './detail.js';
+
+// একসাথে limitটা কাজ (রিল রেন্ডার সমান্তরালে — সময় বাঁচে)
+async function pool(list, limit, fn) {
+  const out = new Array(list.length); let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, async () => {
+    while (next < list.length) { const i = next++; out[i] = await fn(list[i], i); }
+  }));
+  return out;
+}
 
 // বিষয় → খোঁজার শব্দ (Google News)
 export const TOPICS = {
@@ -60,7 +70,7 @@ export async function main() {
   const outputs = new Set(job.outputs?.length ? job.outputs : ['reel', 'card']);
   const base0 = cfg.pages.find((p) => p.id === job.channel?.pageId) || cfg.pages[0];
   const page = { ...base0, theme: { ...base0.theme } };
-  if (job.channel?.name) { page.name = job.channel.name.slice(0, 30); page.logoText = page.name; }
+  if (job.channel?.name) { page.name = noLinks(job.channel.name).slice(0, 30); page.logoText = page.name; page.hashtags = [page.name.replace(/[^\p{L}\p{N}]/gu, '')].filter(Boolean); }
   if (/^#[0-9a-f]{6}$/i.test(job.channel?.accent || '')) page.theme.accent = job.channel.accent;
   const t = dhakaNow();
   const base = { page, t, sample: false };
@@ -75,25 +85,38 @@ export async function main() {
   const voice = { geminiVoice: page.geminiVoice || 'Kore', edgeVoice: page.reelVoice || cfg.reelVoice, edgeRate: page.newsVoiceRate || '+8%' };
   const add = (file, kind, title, caption, extra = {}) => manifest.files.push({ file, kind, title: noLinks(title), caption, ...extra });
 
-  for (const [i, it] of items.entries()) {
-    const n = String(i + 1).padStart(2, '0');
-    const cardLabel = topic === 'sports' ? 'খেলার খবর' : label;
-    if (outputs.has('card')) {
+  const cardLabel = topic === 'sports' ? 'খেলার খবর' : label;
+  const order = []; // ফাইলগুলো খবরের ক্রমে সাজানো থাকবে
+  if (outputs.has('card')) {
+    for (const [i, it] of items.entries()) {
+      const n = String(i + 1).padStart(2, '0');
       const png = await renderCard(K.singleNews({ ...base, label: cardLabel, item: it, breaking: true }), `out/studio/card-${n}.png`);
       copyFileSync(png, `dist/card-${n}.png`);
-      add(`card-${n}.png`, 'card', it.title, C.captionSingle(page, t, 'ব্রেকিং', it, topic), { source: it.source });
+      order.push([i, 0, { file: `card-${n}.png`, kind: 'card', title: noLinks(it.title), caption: C.captionSingle(page, t, 'ব্রেকিং', it, topic), source: it.source }]);
       console.log(`🖼️ কার্ড ${n} তৈরি`);
     }
-    if (outputs.has('reel')) {
+  }
+  if (outputs.has('reel')) {
+    // ১) প্রতিটা খবরের বিস্তারিত (Google Search থেকে আসল প্রতিবেদন পড়ে)
+    for (const it of items) {
+      it.detail = await newsDetail(it).catch(() => null);
+      console.log(it.detail ? `📝 বিস্তারিত পাওয়া গেছে (${it.detail.words} শব্দ): ${it.title.slice(0, 50)}` : `⚠️ বিস্তারিত পাওয়া যায়নি — শুধু শিরোনামের রিল: ${it.title.slice(0, 50)}`);
+    }
+    // ২) রিল — দুটো একসাথে রেন্ডার
+    await pool(items, 2, async (it, i) => {
+      const n = String(i + 1).padStart(2, '0');
       const r = await buildNewsReel({ page, t, dateText: bnDate(t), breaking: true, items: [{ ...it, label: 'ব্রেকিং', topic }], outDir: 'out/studio', name: `reel-${n}`, getBrowser, seed: `${t.iso}|${job.id}|${n}`, voice });
       copyFileSync(r.file, `dist/reel-${n}.mp4`);
-      add(`reel-${n}.mp4`, 'reel', it.title, R.reelBreaking(base, { item: it, topic }).caption, { seconds: Math.round(r.seconds), source: it.source });
+      let caption = R.reelBreaking(base, { item: it, topic }).caption;
+      if (it.detail) { const parts = caption.split('\n\n'); parts.splice(1, 0, it.detail.sentences.join(' ')); caption = parts.join('\n\n'); }
+      order.push([i, 1, { file: `reel-${n}.mp4`, kind: 'reel', title: noLinks(it.title), caption, seconds: Math.round(r.seconds), source: it.source, ...(it.detail ? {} : { note: 'বিস্তারিত খবর পাওয়া যায়নি, তাই শুধু শিরোনাম' }) }]);
       console.log(`🎬 রিল ${n} তৈরি (${r.seconds.toFixed(0)} সেকেন্ড)`);
-    }
+    });
   }
+  order.sort((x, y) => x[0] - y[0] || x[1] - y[1]).forEach(([, , f]) => manifest.files.push(f));
   if (items.length > 1 && outputs.has('headlines-reel')) {
     const title = `${label}: সংবাদ শিরোনাম`;
-    const r = await buildNewsReel({ page, t, dateText: bnDate(t), title, kicker: label, items: items.map((x) => ({ ...x, label })), outDir: 'out/studio', name: 'headlines', getBrowser, seed: `${t.iso}|${job.id}|h`, voice });
+    const r = await buildNewsReel({ page, t, dateText: bnDate(t), title, kicker: label, items: items.map(({ detail, ...x }) => ({ ...x, label })), outDir: 'out/studio', name: 'headlines', getBrowser, seed: `${t.iso}|${job.id}|h`, voice });
     copyFileSync(r.file, 'dist/headlines-reel.mp4');
     add('headlines-reel.mp4', 'reel', title, R.reelNews(base, { title, label, items, topic }).caption, { seconds: Math.round(r.seconds) });
     console.log('🎬 সংবাদ শিরোনাম রিল তৈরি');
