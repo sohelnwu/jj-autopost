@@ -30,6 +30,8 @@ export async function fetchFeed(url) {
     items.forEach((it, i) => {
       const d = blocks[i] || '';
       it.coverage = Math.max(1, (d.match(/&lt;li&gt;|<li>/g) || []).length);
+      // একই খবরের অন্য সংবাদমাধ্যমের লিংক (মূল পাতা পড়া না গেলে বিকল্প হিসেবে)
+      it.alts = [...new Set([...d.matchAll(/href=(?:"|&quot;)(https:\/\/news\.google\.com\/rss\/articles\/[^"&]+)/g)].map((m) => m[1]))].filter((u) => u !== it.link).slice(0, 4);
       it.rank = i;
     });
     return items;

@@ -49,13 +49,27 @@ export function extractArticle(html) {
   return paras.join('\n');
 }
 
-export async function fetchArticle(item) {
-  const url = await resolveGoogleNews(item.link);
-  if (!url) return null;
+async function readOne(link) {
+  const url = await resolveGoogleNews(link);
+  if (!url) return { why: 'আসল লিংক বের হয়নি' };
+  const host = new URL(url).hostname.replace(/^www\./, '');
   try {
     const r = await get(url, { timeout: 20000 });
-    if (!r.ok) return null;
+    if (!r.ok) return { why: `${host} ${r.status}` };
     const text = extractArticle(await r.text());
-    return text.length > 250 ? text.slice(0, 6000) : null;
-  } catch { return null; }
+    if (text.length < 250) return { why: `${host} থেকে লেখা কম (${text.length})` };
+    return { text: text.slice(0, 5000), host };
+  } catch (e) { return { why: `${host} ${e.name === 'AbortError' ? 'সময় শেষ' : e.message}` }; }
+}
+
+// মূল সংবাদমাধ্যম, না হলে একই খবরের অন্য সংবাদমাধ্যম
+export async function fetchArticle(item) {
+  const why = [];
+  for (const link of [item.link, ...(item.alts || [])].filter(Boolean).slice(0, 4)) {
+    const r = await readOne(link);
+    if (r.text) return r;
+    why.push(r.why);
+  }
+  console.log(`   ⚠️ পাতা পড়া যায়নি: ${why.join(' | ') || 'লিংক নেই'}`);
+  return null;
 }

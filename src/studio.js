@@ -98,6 +98,9 @@ export async function main() {
   }
   if (outputs.has('reel')) {
     // ১) প্রতিটা খবরের বিস্তারিত (Google Search থেকে আসল প্রতিবেদন পড়ে)
+    // সব খবরের পাতা একসাথে পড়া (সময় বাঁচে), তারপর Gemini একটা একটা করে
+    const { fetchArticle } = await import('./article.js');
+    await Promise.all(items.map(async (it) => { it.article = await fetchArticle(it).catch(() => null); }));
     for (const it of items) {
       it.detail = await newsDetail(it).catch(() => null);
       console.log(it.detail ? `📝 বিস্তারিত পাওয়া গেছে (${it.detail.words} শব্দ): ${it.title.slice(0, 50)}` : `⚠️ বিস্তারিত পাওয়া যায়নি — শুধু শিরোনামের রিল: ${it.title.slice(0, 50)}`);

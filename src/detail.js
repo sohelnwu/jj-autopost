@@ -28,8 +28,9 @@ const RULES = `নিয়ম:
 const WRITER = 'তুমি বাংলাদেশের একটি শীর্ষ টিভি চ্যানেলের অভিজ্ঞ সংবাদ লেখক।';
 
 export async function newsDetail(item) {
-  const article = await fetchArticle(item).catch(() => null);
-  console.log(article ? `   📄 মূল খবর পাওয়া গেছে (${article.length} অক্ষর)` : '   ⚠️ মূল খবরের পাতা পড়া যায়নি');
+  const art = item.article !== undefined ? item.article : await fetchArticle(item).catch(() => null);
+  const article = art?.text;
+  if (article) console.log(`   📄 মূল খবর: ${art.host} (${article.length} অক্ষর)`);
   let text = null;
   if (article) {
     text = await geminiText(`${WRITER} নিচের প্রতিবেদন থেকে একটি টিভি সংবাদ লেখো।
