@@ -131,16 +131,24 @@ export async function buildNewsReel(opts) {
   const out = `${outDir}/${name}.mp4`;
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(FPS), '-i', '-', '-i', narr,
     '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p', '-r', String(FPS),
-    '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-shortest', out], { stdio: ['pipe', 'inherit', 'inherit'] });
-  const done = new Promise((res, rej) => ff.on('close', (c) => (c === 0 ? res() : rej(new Error(`ভিডিও তৈরি ব্যর্থ (ffmpeg ${c})`)))));
-  const write = (buf) => new Promise((res) => (ff.stdin.write(buf) ? res() : ff.stdin.once('drain', res)));
+    '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-t', total.toFixed(2), out], { stdio: ['pipe', 'inherit', 'pipe'] });
+  let errText = ''; ff.stderr.on('data', (d) => { errText += d; process.stderr.write(d); });
+  let closed = false;
+  ff.stdin.on('error', () => { closed = true; }); // ffmpeg শেষ সময়ে পৌঁছে আগেই পাইপ বন্ধ করলে — স্বাভাবিক
+  const done = new Promise((res, rej) => ff.on('close', (c) => { closed = true; c === 0 ? res() : rej(new Error(`ভিডিও তৈরি ব্যর্থ (ffmpeg ${c}): ${errText.trim().split('\n').slice(-2).join(' ')}`)); }));
+  const write = (buf) => new Promise((res) => {
+    if (closed || ff.stdin.destroyed) return res();
+    const onDrain = () => { ff.removeListener('close', onDrain); res(); };
+    if (ff.stdin.write(buf)) res(); else { ff.stdin.once('drain', onDrain); ff.once('close', onDrain); }
+  });
   const BATCH = 12;
   for (let f = 0; f < frames; f += BATCH) {
     const ts = Array.from({ length: Math.min(BATCH, frames - f) }, (_, k) => (f + k) / FPS);
     const urls = await tab.evaluate(([ts, f0]) => window.drawFrames(ts, f0), [ts, f]);
     for (const u of urls) await write(Buffer.from(u.slice(u.indexOf(',') + 1), 'base64'));
+    if (closed) break;
   }
-  ff.stdin.end();
+  if (!closed) ff.stdin.end();
   await done;
   await tab.close();
   return { file: out, seconds: total, voiced: voiced.length };
