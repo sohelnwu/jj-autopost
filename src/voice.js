@@ -152,10 +152,12 @@ async function textModels() {
 
 // Gemini দিয়ে লেখা তৈরি (Google Search থেকে তথ্য নিয়ে)। কী শেষ হলে পরের কী। ব্যর্থ হলে null।
 const badModels = new Set();
+let lastGood = ''; // এই রানে যে মডেল কাজ করেছে, পরের খবরে আগে সেটা
 const noThink = new Set(); // যেসব মডেল "কম ভাবো" সেটিং নেয় না
 export async function geminiText(prompt, { search = true, deadline = Date.now() + 180000 } = {}) {
   if (!KEYS.length) return null;
-  for (const model of await textModels()) {
+  const ms = await textModels();
+  for (const model of lastGood ? [lastGood, ...ms.filter((m) => m !== lastGood)] : ms) {
     if (badModels.has(model)) continue;
     for (let attempt = 0; attempt < 3 + KEYS.length; attempt++) {
       const left = deadline - Date.now(); if (left < 5000) return null;
@@ -180,11 +182,11 @@ export async function geminiText(prompt, { search = true, deadline = Date.now() 
           console.log(`   ⚠️ ${model}: সীমা পূর্ণ (${msg})`); deadText.add(`${search}|${model}|${key}`); continue;
         }
         if (r.status === 403) { console.log(`   ⚠️ ${model}: অনুমতি নেই (${msg})`); deadText.add(`${search}|${model}|${key}`); continue; }
-        if (r.status >= 500) { await new Promise((ok) => setTimeout(ok, 2000)); if (attempt >= 1) break; continue; } // সার্ভার ব্যস্ত — দ্রুত পরের মডেলে
+        if (r.status >= 500) break; // সার্ভার ব্যস্ত — দ্রুত পরের মডেলে
         if (r.status === 400 && /think/i.test(msg) && !noThink.has(model)) { noThink.add(model); attempt--; continue; }
         if (!r.ok) { console.log(`   ⚠️ ${model}: ${msg}`); badModels.add(model); break; }
         const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
-        if (text) return text;
+        if (text) { lastGood = model; return text; }
         console.log(`   ⚠️ ${model}: খালি উত্তর (${j.candidates?.[0]?.finishReason || '?'})`);
         break;
       } catch (e) { console.log(`   ⚠️ ${model}: ${e.name === 'AbortError' ? 'সময়মতো উত্তর আসেনি' : e.message}`); break; }
